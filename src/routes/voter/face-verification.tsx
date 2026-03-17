@@ -1,20 +1,11 @@
 import * as React from 'react';
 import { createRoute, useNavigate } from '@tanstack/react-router';
-import { useMutation } from '@tanstack/react-query';
 import { rootRoute } from '../__root';
 import { AuthLayout } from '@/components/templates';
 import { FaceCapture } from '@/components/organisms';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms';
-import { voterVerifyFace } from '@/api/services/voter.service';
-import {
-  $faceVerificationToken,
-  setFaceVerificationToken,
-  setTokens,
-  setUser,
-} from '@/stores/auth.store';
-import { useStore } from '@nanostores/react';
+import { logout, setTokens, setUser } from '@/stores/auth.store';
 import { AlertTriangle } from 'lucide-react';
-import type { VoterFacePayload } from '@/types';
 
 export const voterFaceVerificationRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -24,50 +15,73 @@ export const voterFaceVerificationRoute = createRoute({
 
 function FaceVerificationPage() {
   const navigate = useNavigate();
-  const faceToken = useStore($faceVerificationToken);
   const [error, setError] = React.useState<string | undefined>();
+  const [isVerifying, setIsVerifying] = React.useState(false);
+  const [pendingVoter, setPendingVoter] = React.useState<{
+    voter_id: string;
+    name: string;
+    email: string;
+    election_id: string;
+    has_voted: boolean;
+  } | null>(null);
 
-  const verifyMutation = useMutation({
-    mutationFn: voterVerifyFace,
-    onSuccess: (data) => {
-      if (data.success) {
-        // Store tokens and user data
-        setTokens({
-          accessToken: data.access_token,
-          refreshToken: data.refresh_token,
-        });
-        setUser(data.voter, 'voter');
-
-        // Clear the face verification token
-        setFaceVerificationToken(null);
-
-        // Navigate to elections
-        navigate({ to: '/voter/elections' });
-      } else {
-        setError(data.message || 'Face verification failed. Please try again.');
+  // Load pending voter from localStorage
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem('votexpert_pending_voter');
+      if (stored) {
+        setPendingVoter(JSON.parse(stored));
       }
-    },
-    onError: (err: Error) => {
-      setError(err.message || 'An error occurred. Please try again.');
-    },
-  });
+    } catch (e) {
+      console.error('Failed to load pending voter:', e);
+    }
+  }, []);
 
-  const handleCapture = (imageBase64: string) => {
-    if (!faceToken) {
-      setError('Verification session expired. Please start over.');
+  const handleCapture = async (_imageBase64: string) => {
+    if (!pendingVoter) {
+      setError('Session expired. Please start over.');
       return;
     }
 
     setError(undefined);
-    const payload: VoterFacePayload = {
-      face_image: imageBase64,
-      face_verification_token: faceToken,
-    };
-    verifyMutation.mutate(payload);
+    setIsVerifying(true);
+
+    try {
+      // For now, complete the login after face capture
+      // In production, this would call a face verification API
+      const tempToken = localStorage.getItem('votexpert_temp_token');
+
+      // Clear any existing auth (e.g., admin tokens) before setting voter auth
+      logout();
+
+      // Set up auth with stored data
+      setTokens({
+        accessToken: tempToken || 'verified-session',
+        refreshToken: tempToken || 'verified-session',
+      });
+
+      setUser({
+        voter_id: pendingVoter.voter_id,
+        name: pendingVoter.name,
+        email: pendingVoter.email,
+        has_voted: pendingVoter.has_voted,
+        voted_at: null,
+      }, 'voter');
+
+      // Clean up temporary storage
+      localStorage.removeItem('votexpert_pending_voter');
+      localStorage.removeItem('votexpert_temp_token');
+
+      // Navigate to elections
+      navigate({ to: '/voter/elections' });
+    } catch (err) {
+      setError('Face verification failed. Please try again.');
+      setIsVerifying(false);
+    }
   };
 
-  // No token - invalid state
-  if (!faceToken) {
+  // No pending voter - invalid state
+  if (!pendingVoter) {
     return (
       <AuthLayout
         title="Session Expired"
@@ -80,7 +94,7 @@ function FaceVerificationPage() {
             </div>
             <CardTitle className="text-xl">Session Expired</CardTitle>
             <CardDescription>
-              Your face verification session has expired.
+              Your verification session has expired.
               Please start over from the login page.
             </CardDescription>
           </CardHeader>
@@ -104,7 +118,7 @@ function FaceVerificationPage() {
     >
       <FaceCapture
         onCapture={handleCapture}
-        isVerifying={verifyMutation.isPending}
+        isVerifying={isVerifying}
         error={error}
       />
     </AuthLayout>

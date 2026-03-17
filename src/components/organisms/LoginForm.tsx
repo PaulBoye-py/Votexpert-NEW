@@ -92,7 +92,7 @@ export function LoginForm({
         <CardDescription>
           {isAdmin
             ? 'Enter your credentials to access the admin dashboard'
-            : 'Enter your voter ID and email to receive a verification link'}
+            : 'Enter your voter ID and email to receive an OTP'}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -156,7 +156,7 @@ export function LoginForm({
 
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isAdmin ? 'Login' : 'Send Verification Link'}
+            {isAdmin ? 'Login' : 'Send OTP'}
           </Button>
         </form>
       </CardContent>

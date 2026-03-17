@@ -18,6 +18,7 @@ import { adminElectionStatisticsRoute } from './admin/elections/$electionId/stat
 import { adminCandidatesRoute } from './admin/candidates';
 import { adminVotersRoute } from './admin/voters';
 import { adminResultsRoute } from './admin/results';
+import { adminSettingsRoute } from './admin/settings';
 
 // Build the route tree
 export const routeTree = rootRoute.addChildren([
@@ -40,4 +41,5 @@ export const routeTree = rootRoute.addChildren([
   adminCandidatesRoute,
   adminVotersRoute,
   adminResultsRoute,
+  adminSettingsRoute,
 ]);

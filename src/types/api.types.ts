@@ -39,7 +39,8 @@ export interface Voter {
 export interface VoterLoginInitiateResponse {
   success: boolean;
   message: string;
-  verification_required: boolean;
+  voter_id?: string;
+  election_id?: string;
 }
 
 export interface VoterVerifyEmailResponse {
@@ -52,8 +53,21 @@ export interface VoterVerifyEmailResponse {
 export interface VoterVerifyOtpResponse {
   success: boolean;
   message: string;
-  face_verification_required: boolean;
-  face_verification_token: string;
+  access_token?: string;
+  face_verification_required?: boolean;
+  face_verification_token?: string;
+  voter?: {
+    voter_id: string;
+    name: string;
+    email: string;
+    election_id: string;
+    has_voted: boolean;
+  };
+  election?: {
+    election_id: string;
+    election_name: string;
+    status: string;
+  };
 }
 
 export interface VoterVerifyFaceResponse {

@@ -3,14 +3,14 @@ import { createRoute, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { rootRoute } from '../../../__root';
 import { VoterLayout } from '@/components/templates';
-import { ElectionDetailsCard, CandidateList } from '@/components/organisms';
+import { CandidateList } from '@/components/organisms';
 import { AlertMessage } from '@/components/molecules';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/atoms';
-import { getElectionInfo, getElectionCandidates, getVoterProfile } from '@/api/services/voter.service';
+import { getElectionCandidates } from '@/api/services/voter.service';
 import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
 import { Vote, BarChart3, ArrowLeft } from 'lucide-react';
-import type { Voter, ElectionStatus } from '@/types';
+import type { Voter } from '@/types';
 
 export const voterElectionDetailsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -24,6 +24,24 @@ function ElectionDetailsPage() {
   const user = useStore($user) as Voter | null;
   const isAuthenticated = useStore($isAuthenticated);
 
+  // Get election data from localStorage (saved during OTP verification)
+  const [storedElection, setStoredElection] = React.useState<{
+    election_id: string;
+    election_name: string;
+    status: string;
+  } | null>(null);
+
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem('votexpert_election');
+      if (stored) {
+        setStoredElection(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error('Failed to load election data:', e);
+    }
+  }, []);
+
   // Redirect if not authenticated
   React.useEffect(() => {
     if (!isAuthenticated) {
@@ -31,29 +49,16 @@ function ElectionDetailsPage() {
     }
   }, [isAuthenticated, navigate]);
 
-  // Fetch election info
-  const { data: electionData, error: electionError } = useQuery({
-    queryKey: ['election', electionId],
-    queryFn: () => getElectionInfo(electionId),
-    enabled: isAuthenticated && !!electionId,
-  });
-
   // Fetch candidates
-  const { data: candidatesData, isLoading: candidatesLoading } = useQuery({
+  const { data: candidatesData, isLoading: candidatesLoading, error: candidatesError } = useQuery({
     queryKey: ['election', electionId, 'candidates'],
     queryFn: () => getElectionCandidates(electionId),
     enabled: isAuthenticated && !!electionId,
   });
 
-  // Fetch voter profile for voting status
-  const { data: profileData } = useQuery({
-    queryKey: ['voter', 'profile'],
-    queryFn: getVoterProfile,
-    enabled: isAuthenticated,
-  });
-
   const handleLogout = () => {
     logout();
+    localStorage.removeItem('votexpert_election');
     navigate({ to: '/voter/login' });
   };
 
@@ -69,9 +74,12 @@ function ElectionDetailsPage() {
     navigate({ to: '/voter/elections' });
   };
 
-  const election = electionData?.election;
-  const hasVoted = profileData?.voter?.has_voted ?? false;
-  const canVote = election?.voter_status?.can_vote ?? false;
+  // Use stored election data
+  const election = storedElection;
+  const hasVoted = user?.has_voted ?? false;
+  // Determine if voting is available based on election status
+  const isElectionActive = election?.status === 'ongoing' || election?.status === 'active';
+  const canVote = isElectionActive && !hasVoted;
 
   // Transform candidates for display
   const positions = React.useMemo(() => {
@@ -107,22 +115,31 @@ function ElectionDetailsPage() {
           Back to Elections
         </Button>
 
-        {electionError && (
+        {candidatesError && (
           <AlertMessage variant="error">
-            Failed to load election details. Please try again later.
+            Failed to load candidates. Please try again later.
           </AlertMessage>
         )}
 
         {/* Election Details */}
         {election && (
-          <ElectionDetailsCard
-            name={election.election_name}
-            description={election.description}
-            status={election.status as ElectionStatus}
-            startTime={election.start_time}
-            endTime={election.end_time}
-            positions={election.positions}
-          />
+          <Card>
+            <CardHeader>
+              <CardTitle>{election.election_name}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Status:</span>
+                <span className={`text-sm font-medium px-2 py-1 rounded ${
+                  election.status === 'ongoing' || election.status === 'active'
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-gray-700'
+                }`}>
+                  {election.status.charAt(0).toUpperCase() + election.status.slice(1)}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Voting Status & Actions */}
@@ -146,16 +163,20 @@ function ElectionDetailsPage() {
             ) : canVote ? (
               <>
                 <AlertMessage variant="info">
-                  You are eligible to vote in this election. Time remaining: {election?.voter_status?.time_remaining || 'N/A'}
+                  You are eligible to vote in this election. The election is currently active.
                 </AlertMessage>
                 <Button onClick={handleStartVoting} className="w-full" size="lg">
                   <Vote className="mr-2 h-5 w-5" />
                   Start Voting
                 </Button>
               </>
+            ) : !isElectionActive ? (
+              <AlertMessage variant="warning">
+                This election is not currently active. Voting will be available when the election starts.
+              </AlertMessage>
             ) : (
               <AlertMessage variant="warning">
-                Voting is not currently available for this election.
+                You are not eligible to vote in this election.
               </AlertMessage>
             )}
           </CardContent>

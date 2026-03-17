@@ -4,17 +4,13 @@ import { useMutation } from '@tanstack/react-query';
 import { rootRoute } from '../__root';
 import { AuthLayout } from '@/components/templates';
 import { OtpVerificationForm } from '@/components/organisms';
-import { AlertMessage } from '@/components/molecules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms';
 import { voterVerifyOtp } from '@/api/services/voter.service';
-import { setFaceVerificationToken } from '@/stores/auth.store';
-import { Mail } from 'lucide-react';
 import type { VoterOtpPayload } from '@/types';
 
 interface OtpSearchParams {
-  token?: string;
-  awaiting?: string;
   voter_id?: string;
+  election_id?: string;
 }
 
 export const voterOtpRoute = createRoute({
@@ -22,9 +18,8 @@ export const voterOtpRoute = createRoute({
   path: '/voter/otp',
   component: VoterOtpPage,
   validateSearch: (search: Record<string, unknown>): OtpSearchParams => ({
-    token: search.token as string | undefined,
-    awaiting: search.awaiting as string | undefined,
     voter_id: search.voter_id as string | undefined,
+    election_id: search.election_id as string | undefined,
   }),
 });
 
@@ -33,20 +28,23 @@ function VoterOtpPage() {
   const search = useSearch({ from: '/voter/otp' });
   const [error, setError] = React.useState<string | undefined>();
 
-  // Check if we're awaiting email verification
-  const isAwaitingEmail = search.awaiting === 'email';
-  const verificationToken = search.token;
+  const voterId = search.voter_id;
+  const electionId = search.election_id;
 
   const verifyMutation = useMutation({
     mutationFn: voterVerifyOtp,
     onSuccess: (data) => {
-      if (data.success && data.face_verification_required) {
-        // Store face verification token and redirect
-        setFaceVerificationToken(data.face_verification_token);
+      if (data.success && data.voter) {
+        // Save voter and election data for face verification
+        localStorage.setItem('votexpert_pending_voter', JSON.stringify(data.voter));
+        if (data.election) {
+          localStorage.setItem('votexpert_election', JSON.stringify(data.election));
+        }
+        if (data.access_token) {
+          localStorage.setItem('votexpert_temp_token', data.access_token);
+        }
+        // Always go to face verification after OTP
         navigate({ to: '/voter/face-verification' });
-      } else if (data.success) {
-        // No face verification needed, go to elections
-        navigate({ to: '/voter/elections' });
       } else {
         setError(data.message || 'OTP verification failed. Please try again.');
       }
@@ -57,64 +55,27 @@ function VoterOtpPage() {
   });
 
   const handleSubmit = (otp: string) => {
-    if (!verificationToken) {
-      setError('Verification token missing. Please start over from login.');
+    if (!voterId || !electionId) {
+      setError('Session expired. Please start over from login.');
       return;
     }
 
     setError(undefined);
     const payload: VoterOtpPayload = {
-      token: verificationToken,
+      voter_id: voterId,
+      election_id: electionId,
       otp,
     };
     verifyMutation.mutate(payload);
   };
 
   const handleResend = () => {
-    // In a real implementation, this would call an API to resend the OTP
-    // For now, we'll just show a message
-    setError(undefined);
+    // Redirect back to login to resend OTP
+    navigate({ to: '/voter/login' });
   };
 
-  // Show waiting for email screen if user just submitted login
-  if (isAwaitingEmail && !verificationToken) {
-    return (
-      <AuthLayout
-        title="Check Your Email"
-        subtitle="We've sent a verification link to your email"
-      >
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-              <Mail className="w-8 h-8 text-primary" />
-            </div>
-            <CardTitle className="text-xl">Verification Email Sent</CardTitle>
-            <CardDescription>
-              Please check your email and click the verification link to continue.
-              The link will expire in 10 minutes.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <AlertMessage variant="info">
-              After clicking the link in your email, you'll be redirected back here to enter your OTP code.
-            </AlertMessage>
-            <p className="text-sm text-muted-foreground text-center">
-              Didn't receive the email? Check your spam folder or{' '}
-              <button
-                onClick={() => navigate({ to: '/voter/login' })}
-                className="text-primary hover:underline"
-              >
-                try again
-              </button>
-            </p>
-          </CardContent>
-        </Card>
-      </AuthLayout>
-    );
-  }
-
-  // No token provided - invalid state
-  if (!verificationToken) {
+  // No voter_id or election_id - invalid state
+  if (!voterId || !electionId) {
     return (
       <AuthLayout
         title="Session Expired"

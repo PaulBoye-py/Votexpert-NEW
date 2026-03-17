@@ -27,7 +27,8 @@ export interface VoterLoginCredentials {
 }
 
 export interface VoterOtpPayload {
-  token: string;
+  voter_id: string;
+  election_id: string;
   otp: string;
 }
 

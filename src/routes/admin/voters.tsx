@@ -51,18 +51,27 @@ function AdminVotersPage() {
 
   type Voter = {
     voter_id: string;
-    name: string;
-    email: string;
+    user_id?: string;
+    name?: string;
+    email?: string;
     election_id: string;
-    election_name: string;
     has_voted: boolean;
-    verified: boolean;
+    verified?: boolean;
+    verification_status?: string;
   };
 
   const columns = [
-    { key: 'name' as const, header: 'Name' },
-    { key: 'email' as const, header: 'Email' },
-    { key: 'election_name' as const, header: 'Election' },
+    { key: 'voter_id' as const, header: 'Voter ID' },
+    {
+      key: 'name' as const,
+      header: 'Name',
+      render: (item: Voter) => item.name || item.user_id || '-'
+    },
+    {
+      key: 'email' as const,
+      header: 'Email',
+      render: (item: Voter) => item.email || '-'
+    },
     {
       key: 'has_voted' as const,
       header: 'Voted',
@@ -73,11 +82,11 @@ function AdminVotersPage() {
       )
     },
     {
-      key: 'verified' as const,
-      header: 'Verified',
+      key: 'verification_status' as const,
+      header: 'Status',
       render: (item: Voter) => (
-        <Badge variant={item.verified ? 'default' : 'outline'}>
-          {item.verified ? 'Yes' : 'No'}
+        <Badge variant={item.verification_status === 'verified' ? 'default' : 'outline'}>
+          {item.verification_status || 'pending'}
         </Badge>
       )
     },

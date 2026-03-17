@@ -76,7 +76,8 @@ export async function getElectionCandidates(
   position?: string
 ): Promise<CandidatesResponse> {
   const params = position ? { position } : {};
-  const response = await apiClient.get<CandidatesResponse>(
+  // Use public client to avoid 401 logout - candidates are public info
+  const response = await publicApiClient.get<CandidatesResponse>(
     ENDPOINTS.VOTER_ELECTION_CANDIDATES(electionId),
     { params }
   );

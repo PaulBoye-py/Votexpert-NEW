@@ -21,11 +21,14 @@ function VoterLoginPage() {
     mutationFn: voterLoginInitiate,
     onSuccess: (data) => {
       if (data.success) {
-        // Store any session info if needed, then redirect to email verification
-        // The user will receive an email with a verification link
-        // For now, we'll show a success message and redirect to OTP page
-        // In a real flow, the user clicks the email link which redirects to OTP
-        navigate({ to: '/voter/otp', search: { awaiting: 'email' } });
+        // OTP was sent to email, redirect to OTP page with voter info
+        navigate({
+          to: '/voter/otp',
+          search: {
+            voter_id: data.voter_id,
+            election_id: data.election_id
+          }
+        });
       } else {
         setError(data.message || 'Login failed. Please try again.');
       }

@@ -6,7 +6,7 @@ import { VoterLayout } from '@/components/templates';
 import { VotingBooth } from '@/components/organisms';
 import { AlertMessage } from '@/components/molecules';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/atoms';
-import { getElectionInfo, getElectionCandidates, castVote } from '@/api/services/voter.service';
+import { getElectionCandidates, castVote } from '@/api/services/voter.service';
 import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
 import { setVoteReceipt } from '@/stores/election.store';
 import { useStore } from '@nanostores/react';
@@ -26,19 +26,30 @@ function VotingPage() {
   const isAuthenticated = useStore($isAuthenticated);
   const [error, setError] = React.useState<string | undefined>();
 
+  // Get election data from localStorage
+  const [storedElection, setStoredElection] = React.useState<{
+    election_id: string;
+    election_name: string;
+    status: string;
+  } | null>(null);
+
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem('votexpert_election');
+      if (stored) {
+        setStoredElection(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error('Failed to load election data:', e);
+    }
+  }, []);
+
   // Redirect if not authenticated
   React.useEffect(() => {
     if (!isAuthenticated) {
       navigate({ to: '/voter/login' });
     }
   }, [isAuthenticated, navigate]);
-
-  // Fetch election info
-  const { data: electionData, isLoading: electionLoading } = useQuery({
-    queryKey: ['election', electionId],
-    queryFn: () => getElectionInfo(electionId),
-    enabled: isAuthenticated && !!electionId,
-  });
 
   // Fetch candidates
   const { data: candidatesData, isLoading: candidatesLoading } = useQuery({
@@ -58,7 +69,7 @@ function VotingPage() {
         // Store the receipt
         setVoteReceipt({
           ...data.receipt,
-          electionName: electionData?.election?.election_name || 'Election',
+          electionName: storedElection?.election_name || 'Election',
         });
         // Navigate to success page
         navigate({
@@ -88,8 +99,11 @@ function VotingPage() {
     voteMutation.mutate(votes);
   };
 
-  const election = electionData?.election;
-  const canVote = election?.voter_status?.can_vote ?? false;
+  // Use stored election data
+  const election = storedElection;
+  const hasVoted = user?.has_voted ?? false;
+  const isElectionActive = election?.status === 'ongoing' || election?.status === 'active';
+  const canVote = isElectionActive && !hasVoted;
 
   // Transform candidates for VotingBooth
   const positions = React.useMemo(() => {
@@ -106,7 +120,7 @@ function VotingPage() {
     }));
   }, [candidatesData]);
 
-  const isLoading = electionLoading || candidatesLoading;
+  const isLoading = candidatesLoading;
 
   if (!isAuthenticated) {
     return null;

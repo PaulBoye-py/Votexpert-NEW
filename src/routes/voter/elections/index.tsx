@@ -1,12 +1,12 @@
 import * as React from 'react';
 import { createRoute, useNavigate } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
 import { rootRoute } from '../../__root';
 import { VoterLayout } from '@/components/templates';
 import { ElectionList } from '@/components/organisms';
 import { AlertMessage } from '@/components/molecules';
-import { getVoterProfile } from '@/api/services/voter.service';
+import { Button } from '@/components/atoms';
 import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
+import { BarChart3 } from 'lucide-react';
 import { useStore } from '@nanostores/react';
 import type { Voter, ElectionStatus } from '@/types';
 
@@ -21,6 +21,25 @@ function VoterElectionsPage() {
   const user = useStore($user) as Voter | null;
   const isAuthenticated = useStore($isAuthenticated);
 
+  // Get election data from localStorage (saved during OTP verification)
+  const [electionData, setElectionData] = React.useState<{
+    election_id: string;
+    election_name: string;
+    status: string;
+  } | null>(null);
+
+  React.useEffect(() => {
+    // Try to get election from localStorage
+    try {
+      const stored = localStorage.getItem('votexpert_election');
+      if (stored) {
+        setElectionData(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error('Failed to load election data:', e);
+    }
+  }, []);
+
   // Redirect if not authenticated
   React.useEffect(() => {
     if (!isAuthenticated) {
@@ -28,15 +47,9 @@ function VoterElectionsPage() {
     }
   }, [isAuthenticated, navigate]);
 
-  // Fetch voter profile (includes election info)
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['voter', 'profile'],
-    queryFn: getVoterProfile,
-    enabled: isAuthenticated,
-  });
-
   const handleLogout = () => {
     logout();
+    localStorage.removeItem('votexpert_election');
     navigate({ to: '/voter/login' });
   };
 
@@ -44,24 +57,29 @@ function VoterElectionsPage() {
     navigate({ to: '/voter/elections/$electionId', params: { electionId } });
   };
 
+  const handleViewResults = () => {
+    if (electionData) {
+      navigate({ to: '/voter/results/$electionId', params: { electionId: electionData.election_id } });
+    }
+  };
+
   // Transform election data for the list
   const elections = React.useMemo(() => {
-    if (!data?.election) return [];
+    if (!electionData) return [];
 
-    const election = data.election;
     return [
       {
-        id: election.election_id,
-        name: election.election_name,
-        status: election.status as ElectionStatus,
-        startTime: new Date().toISOString(), // Placeholder - would come from API
-        endTime: new Date(Date.now() + 86400000).toISOString(), // Placeholder
+        id: electionData.election_id,
+        name: electionData.election_name,
+        status: electionData.status as ElectionStatus,
+        startTime: new Date().toISOString(),
+        endTime: new Date(Date.now() + 86400000).toISOString(),
       },
     ];
-  }, [data]);
+  }, [electionData]);
 
   const getActionLabel = (election: { id: string; status: string }) => {
-    if (data?.voter?.has_voted) {
+    if (user && 'has_voted' in user && user.has_voted) {
       return 'View Receipt';
     }
     if (election.status === 'ongoing' || election.status === 'active') {
@@ -89,21 +107,25 @@ function VoterElectionsPage() {
         </div>
 
         {/* Voting status message */}
-        {data?.voter?.has_voted && (
-          <AlertMessage variant="success">
-            You have already cast your vote in this election. Thank you for participating!
-          </AlertMessage>
-        )}
-
-        {error && (
-          <AlertMessage variant="error">
-            Failed to load elections. Please try again later.
-          </AlertMessage>
+        {user && 'has_voted' in user && user.has_voted && (
+          <div className="space-y-4">
+            <AlertMessage variant="success">
+              You have already cast your vote in this election. Thank you for participating!
+            </AlertMessage>
+            <Button
+              onClick={handleViewResults}
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
+              <BarChart3 className="mr-2 h-4 w-4" />
+              View Live Results
+            </Button>
+          </div>
         )}
 
         <ElectionList
           elections={elections}
-          isLoading={isLoading}
+          isLoading={false}
           emptyMessage="No elections available at this time."
           onElectionClick={handleElectionClick}
           getActionLabel={getActionLabel}

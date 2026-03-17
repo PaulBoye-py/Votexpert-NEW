@@ -23,7 +23,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+  { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { label: 'Elections', href: '/admin/elections', icon: Vote },
   { label: 'Candidates', href: '/admin/candidates', icon: UserCheck },
   { label: 'Voters', href: '/admin/voters', icon: Users },
@@ -77,8 +77,8 @@ export function AdminLayout({
   };
 
   const isActive = (href: string) => {
-    if (href === '/admin') {
-      return currentPath === '/admin';
+    if (href === '/admin/dashboard') {
+      return currentPath === '/admin/dashboard' || currentPath === '/admin';
     }
     return currentPath.startsWith(href);
   };
