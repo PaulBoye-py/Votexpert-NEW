@@ -5,11 +5,10 @@ import { rootRoute } from '../__root';
 import { AuthLayout } from '@/components/templates';
 import { OtpVerificationForm } from '@/components/organisms';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms';
-import { adminVerifyOtp } from '@/api/services/admin.service';
-import { $sessionToken, setSessionToken, setTokens, setUser } from '@/stores/auth.store';
+import { cognitoConfirmSignUp, cognitoResendCode } from '@/api/services/cognito.service';
+import { $pendingEmail, setPendingEmail } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
 import { AlertTriangle } from 'lucide-react';
-import type { AdminOtpPayload } from '@/types';
 
 export const adminOtpRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -19,76 +18,44 @@ export const adminOtpRoute = createRoute({
 
 function AdminOtpPage() {
   const navigate = useNavigate();
-  const sessionToken = useStore($sessionToken);
+  const email = useStore($pendingEmail);
   const [error, setError] = React.useState<string | undefined>();
 
-  const verifyMutation = useMutation({
-    mutationFn: adminVerifyOtp,
-    onSuccess: (data) => {
-      if (data.success) {
-        // Store tokens and admin data
-        setTokens({
-          accessToken: data.access_token,
-          refreshToken: data.refresh_token,
-        });
-        setUser(data.admin, 'admin');
-
-        // Clear session token
-        setSessionToken(null);
-
-        // Navigate to dashboard
-        navigate({ to: '/admin/dashboard' });
-      } else {
-        setError('OTP verification failed. Please try again.');
-      }
+  const confirmMutation = useMutation({
+    mutationFn: (code: string) => cognitoConfirmSignUp(email!, code),
+    onSuccess: () => {
+      setPendingEmail(null);
+      navigate({ to: '/admin/login' });
     },
     onError: (err: Error) => {
-      setError(err.message || 'An error occurred. Please try again.');
+      setError(err.message);
     },
   });
 
-  const handleSubmit = (otp: string) => {
-    if (!sessionToken) {
-      setError('Session expired. Please login again.');
-      return;
-    }
+  const resendMutation = useMutation({
+    mutationFn: () => cognitoResendCode(email!),
+    onSuccess: () => setError(undefined),
+    onError: (err: Error) => setError(err.message),
+  });
 
-    setError(undefined);
-    const payload: AdminOtpPayload = {
-      session_token: sessionToken,
-      otp,
-    };
-    verifyMutation.mutate(payload);
-  };
-
-  const handleResend = () => {
-    // In a real implementation, this would call an API to resend the OTP
-    setError(undefined);
-  };
-
-  // No session token - invalid state
-  if (!sessionToken) {
+  if (!email) {
     return (
-      <AuthLayout
-        title="Session Expired"
-        subtitle="Please start the login process again"
-      >
+      <AuthLayout title="Session Expired" subtitle="Please start the process again">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="mx-auto w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
               <AlertTriangle className="w-8 h-8 text-destructive" />
             </div>
             <CardTitle className="text-xl">Session Expired</CardTitle>
-            <CardDescription>
-              Your login session has expired. Please start over.
-            </CardDescription>
+            <CardDescription>Please go back and sign up again.</CardDescription>
           </CardHeader>
           <CardContent>
             <button
-              onClick={() => navigate({ to: '/admin/login' })}
+              onClick={() => navigate({ to: '/admin/signup' })}
+              type="button"
               className="w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors"
             >
-              Go to Login
+              Back to Sign Up
             </button>
           </CardContent>
         </Card>
@@ -98,13 +65,16 @@ function AdminOtpPage() {
 
   return (
     <AuthLayout
-      title="Two-Factor Authentication"
-      subtitle="Enter the OTP code sent to your email"
+      title="Verify Your Email"
+      subtitle={`Enter the 6-digit code sent to ${email}`}
     >
       <OtpVerificationForm
-        onSubmit={handleSubmit}
-        onResend={handleResend}
-        isLoading={verifyMutation.isPending}
+        onSubmit={(code) => {
+          setError(undefined);
+          confirmMutation.mutate(code);
+        }}
+        onResend={() => resendMutation.mutate()}
+        isLoading={confirmMutation.isPending || resendMutation.isPending}
         error={error}
       />
     </AuthLayout>

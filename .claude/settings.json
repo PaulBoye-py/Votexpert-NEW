@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(aws cloudformation:*)",
+      "Bash(node -e \"const c = require\\(''./VoteXpert.postman_collection.json''\\); c.variable.forEach\\(v => console.log\\(v.key, ''='', v.value\\)\\)\")",
+      "Bash(npx tsc:*)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(node_modules/.bin/vite build:*)",
+      "Bash(aws sts:*)",
+      "Bash(AWS_PROFILE=paul-arthurite aws sts get-caller-identity)",
+      "Bash(AWS_PROFILE=paul-arthurite AWS_DEFAULT_REGION=us-east-1 npx cdk deploy --all --context env=dev --require-approval never)",
+      "Bash(grep -rn \"voted\\\\|voter_count\\\\|/ 0\\\\|turnout\" /Users/aderoju/Documents/Projects/arthurite/Votexpert-NEW/src/routes/admin --include=*.tsx)",
+      "Bash(grep -n \"voteElectionRedirect\\\\|vote/$electionId\" /Users/aderoju/Documents/Projects/arthurite/Votexpert-NEW/src/routes/routeTree.gen.ts)",
+      "Read(//Users/aderoju/Documents/Projects/arthurite/Votexpert-NEW/src/routes/admin/elections/$electionId/**)"
+    ]
+  }
+}

@@ -25,9 +25,14 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor - Handle errors globally
+// Response interceptor - Unwrap { success, data } envelope + handle errors globally
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+      response.data = response.data.data;
+    }
+    return response;
+  },
   (error: AxiosError<{ error?: string; message?: string }>) => {
     // Handle 401 Unauthorized - logout user
     if (error.response?.status === 401) {
@@ -68,7 +73,12 @@ export const publicApiClient = axios.create({
 });
 
 publicApiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+      response.data = response.data.data;
+    }
+    return response;
+  },
   (error: AxiosError<{ error?: string; message?: string }>) => {
     const errorMessage =
       error.response?.data?.error ||

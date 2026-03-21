@@ -1,30 +1,48 @@
-// API Endpoints - Single source of truth for all API routes
+// API Endpoints — single source of truth for all backend routes
 
 export const ENDPOINTS = {
-  // Admin Authentication
-  ADMIN_LOGIN: '/admin/login',
-  ADMIN_VERIFY_OTP: '/admin/verify-otp',
+  // ─── Org ──────────────────────────────────────────────────────────────────
+  MY_ORG: '/orgs/me',
 
-  // Admin Elections
-  ADMIN_ELECTIONS: '/admin/elections',
-  ADMIN_CANDIDATES: '/admin/candidates',
-  ADMIN_VOTERS: '/admin/voters',
-  ADMIN_ELECTION_DETAILS: (id: string) => `/admin/elections/${id}`,
-  ADMIN_ELECTION_STATISTICS: (id: string) => `/admin/elections/${id}/statistics`,
-  ADMIN_ELECTION_STATUS: (id: string) => `/admin/elections/${id}/status`,
+  // ─── Elections ────────────────────────────────────────────────────────────
+  ELECTIONS: '/elections',
+  ELECTION: (id: string) => `/elections/${id}`,
+  ELECTION_START: (id: string) => `/elections/${id}/start`,
+  ELECTION_END: (id: string) => `/elections/${id}/end`,
+  ELECTION_PUBLISH_RESULTS: (id: string) => `/elections/${id}/publish-results`,
 
-  // Voter Authentication
-  VOTER_LOGIN_INITIATE: '/voter/login/initiate',
-  VOTER_VERIFY_EMAIL: (token: string) => `/voter/verify/${token}`,
-  VOTER_VERIFY_OTP: '/voter/verify/otp',
-  VOTER_VERIFY_FACE: '/voter/verify/face',
+  // ─── Positions ────────────────────────────────────────────────────────────
+  POSITIONS: (electionId: string) => `/elections/${electionId}/positions`,
+  POSITION: (electionId: string, positionId: string) =>
+    `/elections/${electionId}/positions/${positionId}`,
 
-  // Voter Profile & Elections
-  VOTER_PROFILE: '/voter/profile',
-  VOTER_ELECTION_INFO: (id: string) => `/voter/elections/${id}`,
-  VOTER_ELECTION_CANDIDATES: (id: string) => `/voter/elections/${id}/candidates`,
-  VOTER_CAST_VOTE: (id: string) => `/voter/elections/${id}/vote`,
+  // ─── Candidates ───────────────────────────────────────────────────────────
+  CANDIDATES: (electionId: string, positionId: string) =>
+    `/elections/${electionId}/positions/${positionId}/candidates`,
+  CANDIDATE: (electionId: string, positionId: string, candidateId: string) =>
+    `/elections/${electionId}/positions/${positionId}/candidates/${candidateId}`,
 
-  // Public
-  ELECTION_RESULTS: (id: string) => `/elections/${id}/results`,
+  // ─── Voters ───────────────────────────────────────────────────────────────
+  VOTERS: (electionId: string) => `/elections/${electionId}/voters`,
+  VOTER: (electionId: string, voterId: string) =>
+    `/elections/${electionId}/voters/${voterId}`,
+  VOTERS_IMPORT: (electionId: string) => `/elections/${electionId}/voters/import`,
+  VOTERS_SEND_INVITES: (electionId: string) =>
+    `/elections/${electionId}/voters/send-invites`,
+
+  // ─── Voting (public) ──────────────────────────────────────────────────────
+  VOTE_SESSION: '/vote/session',
+  VOTE_VERIFY_TOKEN: '/vote/verify-token',
+  VOTE_CAST: '/vote/cast',
+
+  // ─── Public ───────────────────────────────────────────────────────────────
+  PUBLIC_ELECTION: (id: string) => `/public/elections/${id}`,
+  ELECTION_BY_CODE: (code: string) => `/public/elections/code/${code}`,
+
+  // ─── Lobby (public) ───────────────────────────────────────────────────────
+  LOBBY_JOIN: (id: string) => `/public/elections/${id}/lobby`,
+  LOBBY_STATE: (id: string) => `/public/elections/${id}/lobby`,
+
+  // ─── Results (public) ─────────────────────────────────────────────────────
+  RESULTS: (id: string) => `/results/${id}`,
 } as const;

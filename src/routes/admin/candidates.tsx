@@ -3,14 +3,12 @@ import { createRoute, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { rootRoute } from '../__root';
 import { AdminLayout } from '@/components/templates';
-import { DataTable } from '@/components/organisms';
-import { AlertMessage } from '@/components/molecules';
-import { Button, Badge } from '@/components/atoms';
-import { getAdminCandidates } from '@/api/services/admin.service';
-import { $user, $isAuthenticated, $isAdmin, logout } from '@/stores/auth.store';
+import { Button, Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/atoms';
+import { getElections, getPositions, getCandidates } from '@/api/services/admin.service';
+import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
-import { Plus } from 'lucide-react';
-import type { Admin } from '@/types';
+import { ArrowUpRight } from 'lucide-react';
+import type { Admin, Election, Candidate } from '@/types';
 
 export const adminCandidatesRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -18,98 +16,112 @@ export const adminCandidatesRoute = createRoute({
   component: AdminCandidatesPage,
 });
 
+type FlatCandidate = Candidate & { electionTitle: string; positionTitle: string };
+
 function AdminCandidatesPage() {
   const navigate = useNavigate();
   const user = useStore($user) as Admin | null;
   const isAuthenticated = useStore($isAuthenticated);
-  const isAdmin = useStore($isAdmin);
 
   React.useEffect(() => {
-    if (!isAuthenticated || !isAdmin) {
-      navigate({ to: '/admin/login' });
-    }
-  }, [isAuthenticated, isAdmin, navigate]);
+    if (!isAuthenticated) navigate({ to: '/admin/login' });
+  }, [isAuthenticated, navigate]);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['admin', 'candidates'],
-    queryFn: getAdminCandidates,
-    enabled: isAuthenticated && isAdmin,
+  // Fetch all elections, then positions + candidates for each
+  const { data: elections = [], isLoading } = useQuery({
+    queryKey: ['admin', 'elections'],
+    queryFn: getElections,
+    enabled: isAuthenticated,
   });
 
-  const handleLogout = () => {
-    logout();
-    navigate({ to: '/admin/login' });
-  };
-
-  const handleNavigate = (path: string) => {
-    navigate({ to: path });
-  };
-
-  if (!isAuthenticated || !isAdmin) {
-    return null;
-  }
-
-  type Candidate = {
-    candidate_id: string;
-    name: string;
-    position: string;
-    election_id: string;
-    election_name: string;
-    bio: string;
-    photo_url: string;
-    status: string;
-  };
-
-  const columns = [
-    { key: 'name' as const, header: 'Name' },
-    { key: 'position' as const, header: 'Position' },
-    { key: 'election_name' as const, header: 'Election' },
-    {
-      key: 'status' as const,
-      header: 'Status',
-      render: (item: Candidate) => (
-        <Badge variant={item.status === 'active' ? 'default' : 'secondary'}>
-          {item.status || 'pending'}
-        </Badge>
-      )
+  const { data: flatCandidates = [], isLoading: cLoading } = useQuery({
+    queryKey: ['admin', 'all-candidates', elections.map((e: Election) => e.election_id).join(',')],
+    queryFn: async () => {
+      const result: FlatCandidate[] = [];
+      for (const election of elections) {
+        const positions = await getPositions(election.election_id);
+        for (const pos of positions) {
+          const candidates = await getCandidates(election.election_id, pos.position_id);
+          candidates.forEach((c) =>
+            result.push({ ...c, electionTitle: election.title, positionTitle: pos.title })
+          );
+        }
+      }
+      return result;
     },
-  ];
+    enabled: elections.length > 0,
+  });
+
+  if (!isAuthenticated) return null;
 
   return (
     <AdminLayout
-      adminName={user?.username || 'Admin'}
+      adminName={user?.name || 'Admin'}
       adminEmail={user?.email}
+      orgName={user?.org_name}
       currentPath="/admin/candidates"
-      onNavigate={handleNavigate}
-      onLogout={handleLogout}
+      onNavigate={(path) => navigate({ to: path })}
+      onLogout={() => { logout(); navigate({ to: '/admin/login' }); }}
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Candidates</h1>
-            <p className="text-muted-foreground">
-              Manage all candidates across elections
-            </p>
+            <p className="text-muted-foreground">All candidates across your elections</p>
           </div>
-          <Button onClick={() => handleNavigate('/admin/elections/create')}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add via Election
+          <Button variant="outline" onClick={() => navigate({ to: '/admin/elections' })}>
+            <ArrowUpRight className="mr-2 h-4 w-4" />
+            Manage in Elections
           </Button>
         </div>
 
-        {error && (
-          <AlertMessage variant="error">
-            Failed to load candidates. Please try again later.
-          </AlertMessage>
+        {(isLoading || cLoading) ? (
+          <Card><CardContent className="p-8 text-center text-muted-foreground">Loading…</CardContent></Card>
+        ) : flatCandidates.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center space-y-3">
+              <p className="text-muted-foreground">No candidates yet.</p>
+              <Button onClick={() => navigate({ to: '/admin/elections/create' })}>
+                Create an Election
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>All Candidates ({flatCandidates.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-lg border border-border divide-y divide-border">
+                {flatCandidates.map((c) => (
+                  <div key={c.candidate_id} className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 bg-muted">
+                        {c.photo_url ? (
+                          <img src={c.photo_url} alt={c.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs font-bold text-muted-foreground">
+                            {c.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{c.name}</p>
+                        {c.bio && <p className="text-xs text-muted-foreground">{c.bio}</p>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 text-right">
+                      <div>
+                        <Badge variant="secondary" className="text-xs">{c.positionTitle}</Badge>
+                        <p className="text-xs text-muted-foreground mt-0.5">{c.electionTitle}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
-
-        <DataTable
-          columns={columns}
-          data={data?.candidates || []}
-          keyField="candidate_id"
-          isLoading={isLoading}
-          emptyMessage="No candidates found. Add candidates when creating an election."
-        />
       </div>
     </AdminLayout>
   );

@@ -1,97 +1,111 @@
-import { apiClient, publicApiClient } from '../client';
+import { publicApiClient } from '../client';
 import { ENDPOINTS } from '../endpoints';
 import type {
-  VoterLoginInitiateResponse,
-  VoterVerifyEmailResponse,
-  VoterVerifyOtpResponse,
-  VoterVerifyFaceResponse,
-  VoterProfileResponse,
-  ElectionInfo,
-  CandidatesResponse,
+  VoteSessionResponse,
+  VerifyTokenResponse,
+  CastVotePayload,
   CastVoteResponse,
-  VotePayload,
+  PublicElectionResponse,
+  ElectionResultsResponse,
+  JoinLobbyResponse,
+  LobbyStateResponse,
 } from '@/types';
-import type { VoterLoginCredentials, VoterOtpPayload, VoterFacePayload } from '@/types';
 
-// Voter Authentication
-export async function voterLoginInitiate(
-  credentials: VoterLoginCredentials
-): Promise<VoterLoginInitiateResponse> {
-  const response = await publicApiClient.post<VoterLoginInitiateResponse>(
-    ENDPOINTS.VOTER_LOGIN_INITIATE,
-    credentials
-  );
-  return response.data;
+// ─── Election code lookup ─────────────────────────────────────────────────────
+
+export interface ElectionByCodeResponse {
+  election_id: string;
+  title: string;
+  description?: string;
+  type: 'OPEN' | 'CLOSED';
+  status: string;
+  election_code: string;
 }
 
-export async function voterVerifyEmail(
-  token: string
-): Promise<VoterVerifyEmailResponse> {
-  const response = await publicApiClient.get<VoterVerifyEmailResponse>(
-    ENDPOINTS.VOTER_VERIFY_EMAIL(token)
+export async function getElectionByCode(code: string): Promise<ElectionByCodeResponse> {
+  const res = await publicApiClient.get<ElectionByCodeResponse>(
+    ENDPOINTS.ELECTION_BY_CODE(code)
   );
-  return response.data;
+  return res.data;
 }
 
-export async function voterVerifyOtp(
-  payload: VoterOtpPayload
-): Promise<VoterVerifyOtpResponse> {
-  const response = await publicApiClient.post<VoterVerifyOtpResponse>(
-    ENDPOINTS.VOTER_VERIFY_OTP,
-    payload
-  );
-  return response.data;
-}
+// ─── Public Election ──────────────────────────────────────────────────────────
 
-export async function voterVerifyFace(
-  payload: VoterFacePayload
-): Promise<VoterVerifyFaceResponse> {
-  const response = await publicApiClient.post<VoterVerifyFaceResponse>(
-    ENDPOINTS.VOTER_VERIFY_FACE,
-    payload
-  );
-  return response.data;
-}
-
-// Voter Profile
-export async function getVoterProfile(): Promise<VoterProfileResponse> {
-  const response = await apiClient.get<VoterProfileResponse>(
-    ENDPOINTS.VOTER_PROFILE
-  );
-  return response.data;
-}
-
-// Elections
-export async function getElectionInfo(
+export async function getPublicElection(
   electionId: string
-): Promise<{ success: boolean; election: ElectionInfo }> {
-  const response = await apiClient.get<{ success: boolean; election: ElectionInfo }>(
-    ENDPOINTS.VOTER_ELECTION_INFO(electionId)
+): Promise<PublicElectionResponse> {
+  const res = await publicApiClient.get<PublicElectionResponse>(
+    ENDPOINTS.PUBLIC_ELECTION(electionId)
   );
-  return response.data;
+  return res.data;
 }
 
-export async function getElectionCandidates(
+// ─── Vote Session — Open Elections ────────────────────────────────────────────
+
+export async function startVoteSession(
   electionId: string,
-  position?: string
-): Promise<CandidatesResponse> {
-  const params = position ? { position } : {};
-  // Use public client to avoid 401 logout - candidates are public info
-  const response = await publicApiClient.get<CandidatesResponse>(
-    ENDPOINTS.VOTER_ELECTION_CANDIDATES(electionId),
-    { params }
+  existingToken?: string
+): Promise<VoteSessionResponse> {
+  const res = await publicApiClient.post<VoteSessionResponse>(
+    ENDPOINTS.VOTE_SESSION,
+    { election_id: electionId, session_token: existingToken }
   );
-  return response.data;
+  return res.data;
 }
 
-// Voting
+// ─── Verify Invite Token — Closed Elections ───────────────────────────────────
+
+export async function verifyInviteToken(
+  token: string
+): Promise<VerifyTokenResponse> {
+  const res = await publicApiClient.get<VerifyTokenResponse>(
+    ENDPOINTS.VOTE_VERIFY_TOKEN,
+    { params: { token } }
+  );
+  return res.data;
+}
+
+// ─── Cast Vote ────────────────────────────────────────────────────────────────
+
 export async function castVote(
-  electionId: string,
-  votes: VotePayload
+  payload: CastVotePayload
 ): Promise<CastVoteResponse> {
-  const response = await apiClient.post<CastVoteResponse>(
-    ENDPOINTS.VOTER_CAST_VOTE(electionId),
-    votes
+  const res = await publicApiClient.post<CastVoteResponse>(
+    ENDPOINTS.VOTE_CAST,
+    payload
   );
-  return response.data;
+  return res.data;
+}
+
+// ─── Lobby ────────────────────────────────────────────────────────────────────
+
+export async function joinLobby(
+  electionId: string,
+  displayName?: string
+): Promise<JoinLobbyResponse> {
+  const res = await publicApiClient.post<JoinLobbyResponse>(
+    ENDPOINTS.LOBBY_JOIN(electionId),
+    { display_name: displayName || undefined }
+  );
+  return res.data;
+}
+
+export async function getLobbyState(
+  electionId: string
+): Promise<LobbyStateResponse> {
+  const res = await publicApiClient.get<LobbyStateResponse>(
+    ENDPOINTS.LOBBY_STATE(electionId)
+  );
+  return res.data;
+}
+
+// ─── Results ─────────────────────────────────────────────────────────────────
+
+export async function getElectionResults(
+  electionId: string
+): Promise<ElectionResultsResponse> {
+  const res = await publicApiClient.get<ElectionResultsResponse>(
+    ENDPOINTS.RESULTS(electionId)
+  );
+  return res.data;
 }

@@ -6,11 +6,11 @@ import { AdminLayout } from '@/components/templates';
 import { ElectionList } from '@/components/organisms';
 import { AlertMessage } from '@/components/molecules';
 import { Button } from '@/components/atoms';
-import { getAdminElections } from '@/api/services/admin.service';
-import { $user, $isAuthenticated, $isAdmin, logout } from '@/stores/auth.store';
+import { getElections } from '@/api/services/admin.service';
+import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
 import { Plus } from 'lucide-react';
-import type { Admin, ElectionStatus } from '@/types';
+import type { Admin } from '@/types';
 
 export const adminElectionsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -22,76 +22,45 @@ function AdminElectionsPage() {
   const navigate = useNavigate();
   const user = useStore($user) as Admin | null;
   const isAuthenticated = useStore($isAuthenticated);
-  const isAdmin = useStore($isAdmin);
 
-  // Redirect if not authenticated or not admin
   React.useEffect(() => {
-    if (!isAuthenticated || !isAdmin) {
-      navigate({ to: '/admin/login' });
-    }
-  }, [isAuthenticated, isAdmin, navigate]);
+    if (!isAuthenticated) navigate({ to: '/admin/login' });
+  }, [isAuthenticated, navigate]);
 
-  // Fetch elections
-  const { data, isLoading, error } = useQuery({
+  const { data: elections = [], isLoading, error } = useQuery({
     queryKey: ['admin', 'elections'],
-    queryFn: getAdminElections,
-    enabled: isAuthenticated && isAdmin,
+    queryFn: getElections,
+    enabled: isAuthenticated,
   });
 
-  const handleLogout = () => {
-    logout();
-    navigate({ to: '/admin/login' });
-  };
-
-  const handleNavigate = (path: string) => {
-    navigate({ to: path });
-  };
-
-  const handleElectionClick = (electionId: string) => {
-    navigate({ to: '/admin/elections/$electionId', params: { electionId } });
-  };
-
-  const handleCreateElection = () => {
-    navigate({ to: '/admin/elections/create' });
-  };
-
-  // Transform API data to match component interface
-  const elections = React.useMemo(() => {
-    if (!data?.elections) return [];
-    return data.elections.map((e) => ({
+  const electionsList = React.useMemo(() =>
+    elections.map((e) => ({
       id: e.election_id,
-      name: e.election_name,
-      description: e.description,
-      status: e.status as ElectionStatus,
-      startTime: e.election_start_time,
-      endTime: e.election_end_time,
-      totalVoters: e.total_voters,
-      votesCast: e.votes_cast,
-    }));
-  }, [data?.elections]);
+      name: e.title,
+      description: e.description ?? '',
+      status: e.status,
+      startTime: e.started_at ?? e.scheduled_start_at ?? e.created_at,
+      endTime: e.ended_at ?? '',
+    })), [elections]);
 
-  if (!isAuthenticated || !isAdmin) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
 
   return (
     <AdminLayout
-      adminName={user?.username || 'Admin'}
+      adminName={user?.name || 'Admin'}
       adminEmail={user?.email}
+      orgName={user?.org_name}
       currentPath="/admin/elections"
-      onNavigate={handleNavigate}
-      onLogout={handleLogout}
+      onNavigate={(path) => navigate({ to: path })}
+      onLogout={() => { logout(); navigate({ to: '/admin/login' }); }}
     >
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Elections</h1>
-            <p className="text-muted-foreground">
-              Manage all your elections
-            </p>
+            <p className="text-muted-foreground">Manage all your elections</p>
           </div>
-          <Button onClick={handleCreateElection}>
+          <Button onClick={() => navigate({ to: '/admin/elections/create' })}>
             <Plus className="mr-2 h-4 w-4" />
             Create Election
           </Button>
@@ -103,16 +72,17 @@ function AdminElectionsPage() {
           </AlertMessage>
         )}
 
-        {/* Elections List */}
         <ElectionList
-          elections={elections}
+          elections={electionsList}
           isLoading={isLoading}
           emptyMessage="No elections yet. Create your first election!"
-          onElectionClick={handleElectionClick}
-          getActionLabel={(election) => {
-            if (election.status === 'draft') return 'Edit';
-            if (election.status === 'ongoing') return 'Monitor';
-            if (election.status === 'results_announced') return 'View Results';
+          onElectionClick={(id) =>
+            navigate({ to: '/admin/elections/$electionId', params: { electionId: id } })
+          }
+          getActionLabel={(e) => {
+            if (e.status === 'DRAFT') return 'Set Up';
+            if (e.status === 'ACTIVE') return 'Monitor';
+            if (e.status === 'RESULTS_PUBLISHED') return 'View Results';
             return 'Manage';
           }}
         />

@@ -19,13 +19,12 @@ interface ElectionCardProps {
   className?: string;
 }
 
-const statusVariants: Record<ElectionStatus, 'default' | 'secondary' | 'success' | 'warning' | 'info' | 'destructive'> = {
-  draft: 'secondary',
-  active: 'info',
-  ongoing: 'success',
-  concluded: 'default',
-  cancelled: 'destructive',
-  results_announced: 'success',
+const statusVariants: Partial<Record<ElectionStatus, 'default' | 'secondary' | 'success' | 'warning' | 'info' | 'destructive'>> = {
+  DRAFT: 'secondary',
+  SCHEDULED: 'warning',
+  ACTIVE: 'info',
+  CLOSED: 'default',
+  RESULTS_PUBLISHED: 'success',
 };
 
 export function ElectionCard({
@@ -55,7 +54,7 @@ export function ElectionCard({
             </p>
           )}
         </div>
-        <Badge variant={statusVariants[status]}>
+        <Badge variant={statusVariants[status] ?? 'default'}>
           {ELECTION_STATUS_LABELS[status] || status}
         </Badge>
       </div>
@@ -66,7 +65,7 @@ export function ElectionCard({
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Calendar className="h-4 w-4" />
           <span>
-            {formatDate(startTime)} - {formatDate(endTime)}
+            {formatDate(startTime)}{endTime ? ` - ${formatDate(endTime)}` : ''}
           </span>
         </div>
 

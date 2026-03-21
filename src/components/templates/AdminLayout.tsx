@@ -35,6 +35,7 @@ interface AdminLayoutProps {
   children: React.ReactNode;
   adminName?: string;
   adminEmail?: string;
+  orgName?: string;
   currentPath?: string;
   onNavigate?: (path: string) => void;
   onLogout?: () => void;
@@ -45,6 +46,7 @@ export function AdminLayout({
   children,
   adminName = 'Admin',
   adminEmail,
+  orgName,
   currentPath = '/admin',
   onNavigate,
   onLogout,
@@ -162,11 +164,9 @@ export function AdminLayout({
               <p className="text-sm font-medium text-foreground truncate">
                 {adminName}
               </p>
-              {adminEmail && (
-                <p className="text-xs text-muted-foreground truncate">
-                  {adminEmail}
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground truncate">
+                {orgName || adminEmail}
+              </p>
             </div>
           </div>
         </div>

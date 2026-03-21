@@ -31,13 +31,12 @@ interface ElectionDetailsCardProps {
   className?: string;
 }
 
-const statusVariants: Record<ElectionStatus, 'default' | 'secondary' | 'success' | 'warning' | 'info' | 'destructive'> = {
-  draft: 'secondary',
-  active: 'info',
-  ongoing: 'success',
-  concluded: 'default',
-  cancelled: 'destructive',
-  results_announced: 'success',
+const statusVariants: Partial<Record<ElectionStatus, 'default' | 'secondary' | 'success' | 'warning' | 'info' | 'destructive'>> = {
+  DRAFT: 'secondary',
+  SCHEDULED: 'warning',
+  ACTIVE: 'info',
+  CLOSED: 'default',
+  RESULTS_PUBLISHED: 'success',
 };
 
 export function ElectionDetailsCard({
@@ -65,7 +64,7 @@ export function ElectionDetailsCard({
                 <CardDescription className="mt-2">{description}</CardDescription>
               )}
             </div>
-            <Badge variant={statusVariants[status]} className="text-sm">
+            <Badge variant={statusVariants[status] ?? 'default'} className="text-sm">
               {ELECTION_STATUS_LABELS[status] || status}
             </Badge>
           </div>

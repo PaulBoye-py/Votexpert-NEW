@@ -86,3 +86,19 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-muted-foreground);
 }
+
+/* Landing page */
+.hero-glow {
+  background: radial-gradient(ellipse 80% 50% at 50% -10%, oklch(72% 0.19 145 / 0.12), transparent);
+}
+
+.hero-headline-gradient {
+  background: linear-gradient(135deg, oklch(72% 0.19 145), oklch(80% 0.18 145));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.cta-banner-glow {
+  background: radial-gradient(ellipse 100% 100% at 50% 100%, oklch(72% 0.19 145 / 0.08), transparent);
+}

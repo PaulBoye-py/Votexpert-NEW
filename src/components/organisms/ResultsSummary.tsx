@@ -192,12 +192,21 @@ export function ResultsSummary({
             {winners.map(({ position, winner }) => (
               <div
                 key={position}
-                className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
               >
-                <span className="font-medium text-foreground">{position}</span>
-                <span className="text-muted-foreground">
-                  {winner?.name || 'No winner'}
-                </span>
+                <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-muted border border-border">
+                  {winner?.photoUrl ? (
+                    <img src={winner.photoUrl} alt={winner.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-sm font-bold text-muted-foreground">
+                      {winner?.name.charAt(0).toUpperCase() ?? '?'}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground truncate">{position}</p>
+                  <p className="font-semibold text-sm truncate">{winner?.name || 'No winner'}</p>
+                </div>
               </div>
             ))}
           </div>

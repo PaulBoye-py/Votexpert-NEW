@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Dark rounded background -->
+  <rect width="32" height="32" rx="7" fill="oklch(17% 0.025 265)"/>
+  <!-- Vote/ballot box icon (simplified from lucide Vote) -->
+  <!-- Ballot box base -->
+  <rect x="7" y="14" width="18" height="12" rx="2" stroke="oklch(72% 0.19 145)" stroke-width="2" fill="none"/>
+  <!-- Slot on top -->
+  <path d="M13 14V12C13 10.9 13.9 10 15 10H17C18.1 10 19 10.9 19 12V14" stroke="oklch(72% 0.19 145)" stroke-width="2" stroke-linecap="round"/>
+  <!-- Checkmark inside box -->
+  <path d="M12 20.5L14.5 23L20 17.5" stroke="oklch(72% 0.19 145)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

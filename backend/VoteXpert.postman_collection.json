@@ -1,0 +1,796 @@
+{
+  "info": {
+    "name": "VoteXpert API",
+    "description": "Full API test collection for VoteXpert backend. Run requests in order within each folder. IDs are auto-captured into collection variables via test scripts.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://gwu4e5i518.execute-api.us-east-1.amazonaws.com/dev" },
+    { "key": "clientId", "value": "43ahv009vhb9rivcj9us9kaeio" },
+    { "key": "email", "value": "admin@test.com" },
+    { "key": "password", "value": "Test1234!" },
+    { "key": "orgName", "value": "Test Org" },
+    { "key": "token", "value": "" },
+    { "key": "electionId", "value": "" },
+    { "key": "positionId", "value": "" },
+    { "key": "candidateId", "value": "" },
+    { "key": "candidateId2", "value": "" },
+    { "key": "sessionToken", "value": "" },
+    { "key": "inviteToken", "value": "" },
+    { "key": "voterId", "value": "" },
+    { "key": "closedElectionId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "🔐 Auth",
+      "item": [
+        {
+          "name": "1. Sign Up",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "https://cognito-idp.us-east-1.amazonaws.com/",
+              "protocol": "https",
+              "host": ["cognito-idp", "us-east-1", "amazonaws", "com"],
+              "path": ["/"]
+            },
+            "header": [
+              { "key": "Content-Type", "value": "application/x-amz-json-1.1" },
+              { "key": "X-Amz-Target", "value": "AWSCognitoIdentityProviderService.SignUp" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ClientId\": \"{{clientId}}\",\n  \"Username\": \"{{email}}\",\n  \"Password\": \"{{password}}\",\n  \"UserAttributes\": [\n    { \"Name\": \"name\", \"Value\": \"Test Admin\" },\n    { \"Name\": \"custom:org_name\", \"Value\": \"{{orgName}}\" }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Sign up successful', function() {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+                  "  if (pm.response.code === 400) {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.__type).to.include('UsernameExistsException');",
+                  "    console.log('User already exists — skip to Sign In');",
+                  "  } else {",
+                  "    console.log('✅ Signed up. Check email for OTP code.');",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Confirm OTP",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "https://cognito-idp.us-east-1.amazonaws.com/",
+              "protocol": "https",
+              "host": ["cognito-idp", "us-east-1", "amazonaws", "com"],
+              "path": ["/"]
+            },
+            "header": [
+              { "key": "Content-Type", "value": "application/x-amz-json-1.1" },
+              { "key": "X-Amz-Target", "value": "AWSCognitoIdentityProviderService.ConfirmSignUp" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ClientId\": \"{{clientId}}\",\n  \"Username\": \"{{email}}\",\n  \"ConfirmationCode\": \"PASTE_OTP_HERE\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('OTP confirmed', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  console.log('✅ Email confirmed. Run Sign In next.');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Sign In",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "https://cognito-idp.us-east-1.amazonaws.com/",
+              "protocol": "https",
+              "host": ["cognito-idp", "us-east-1", "amazonaws", "com"],
+              "path": ["/"]
+            },
+            "header": [
+              { "key": "Content-Type", "value": "application/x-amz-json-1.1" },
+              { "key": "X-Amz-Target", "value": "AWSCognitoIdentityProviderService.InitiateAuth" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ClientId\": \"{{clientId}}\",\n  \"AuthFlow\": \"USER_PASSWORD_AUTH\",\n  \"AuthParameters\": {\n    \"USERNAME\": \"{{email}}\",\n    \"PASSWORD\": \"{{password}}\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Sign in successful', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  const body = pm.response.json();",
+                  "  const token = body.AuthenticationResult.IdToken;",
+                  "  pm.collectionVariables.set('token', token);",
+                  "  console.log('✅ Token saved to collection variable.');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "🏢 Org",
+      "item": [
+        {
+          "name": "Get My Org",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/orgs/me", "host": ["{{baseUrl}}"], "path": ["orgs", "me"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Got org', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  const body = pm.response.json();",
+                  "  console.log('Org:', JSON.stringify(body.data, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "🗳️ Elections",
+      "item": [
+        {
+          "name": "Create Open Election",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/elections", "host": ["{{baseUrl}}"], "path": ["elections"] },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Student Council Election 2025\",\n  \"description\": \"Annual student council election\",\n  \"type\": \"OPEN\",\n  \"show_live_results\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Election created', function() {",
+                  "  pm.expect(pm.response.code).to.equal(201);",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('electionId', body.data.election_id);",
+                  "  console.log('✅ electionId:', body.data.election_id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Closed Election",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/elections", "host": ["{{baseUrl}}"], "path": ["elections"] },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Board of Directors Election\",\n  \"description\": \"Private election for board members\",\n  \"type\": \"CLOSED\",\n  \"show_live_results\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Closed election created', function() {",
+                  "  pm.expect(pm.response.code).to.equal(201);",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('closedElectionId', body.data.election_id);",
+                  "  console.log('✅ closedElectionId:', body.data.election_id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Elections",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/elections", "host": ["{{baseUrl}}"], "path": ["elections"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Listed elections', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  const body = pm.response.json();",
+                  "  console.log('Elections:', body.data.length);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Election",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/elections/{{electionId}}", "host": ["{{baseUrl}}"], "path": ["elections", "{{electionId}}"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Update Election",
+          "request": {
+            "method": "PUT",
+            "url": { "raw": "{{baseUrl}}/elections/{{electionId}}", "host": ["{{baseUrl}}"], "path": ["elections", "{{electionId}}"] },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Student Council Election 2025 (Updated)\",\n  \"show_live_results\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Start Election",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/elections/{{electionId}}/start", "host": ["{{baseUrl}}"], "path": ["elections", "{{electionId}}", "start"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Election started', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  const body = pm.response.json();",
+                  "  console.log('✅ Election started. Status:', body.data.status);",
+                  "  console.log('Expected end:', body.data.expected_end_at);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "End Election",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/elections/{{electionId}}/end", "host": ["{{baseUrl}}"], "path": ["elections", "{{electionId}}", "end"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Publish Results",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/elections/{{electionId}}/publish-results", "host": ["{{baseUrl}}"], "path": ["elections", "{{electionId}}", "publish-results"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Delete Election",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/elections/{{electionId}}", "host": ["{{baseUrl}}"], "path": ["elections", "{{electionId}}"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "📋 Positions",
+      "item": [
+        {
+          "name": "Create Position (President)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/elections/{{electionId}}/positions", "host": ["{{baseUrl}}"], "path": ["elections", "{{electionId}}", "positions"] },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"President\",\n  \"description\": \"Vote for your student president\",\n  \"duration_seconds\": 60\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Position created', function() {",
+                  "  pm.expect(pm.response.code).to.equal(201);",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('positionId', body.data.position_id);",
+                  "  console.log('✅ positionId:', body.data.position_id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Position (Vice President)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/elections/{{electionId}}/positions", "host": ["{{baseUrl}}"], "path": ["elections", "{{electionId}}", "positions"] },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Vice President\",\n  \"description\": \"Vote for your vice president\",\n  \"duration_seconds\": 45\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "List Positions",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/elections/{{electionId}}/positions", "host": ["{{baseUrl}}"], "path": ["elections", "{{electionId}}", "positions"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Update Position",
+          "request": {
+            "method": "PUT",
+            "url": { "raw": "{{baseUrl}}/elections/{{electionId}}/positions/{{positionId}}", "host": ["{{baseUrl}}"], "path": ["elections", "{{electionId}}", "positions", "{{positionId}}"] },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"President\",\n  \"duration_seconds\": 90\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "👤 Candidates",
+      "item": [
+        {
+          "name": "Create Candidate (Alice)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/elections/{{electionId}}/positions/{{positionId}}/candidates", "host": ["{{baseUrl}}"], "path": ["elections", "{{electionId}}", "positions", "{{positionId}}", "candidates"] },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Alice Johnson\",\n  \"bio\": \"Experienced leader with 3 years on student council\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Candidate created', function() {",
+                  "  pm.expect(pm.response.code).to.equal(201);",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('candidateId', body.data.candidate_id);",
+                  "  console.log('✅ candidateId (Alice):', body.data.candidate_id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Candidate (Bob)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/elections/{{electionId}}/positions/{{positionId}}/candidates", "host": ["{{baseUrl}}"], "path": ["elections", "{{electionId}}", "positions", "{{positionId}}", "candidates"] },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bob Smith\",\n  \"bio\": \"Fresh ideas and a new perspective for the council\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Candidate 2 created', function() {",
+                  "  pm.expect(pm.response.code).to.equal(201);",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('candidateId2', body.data.candidate_id);",
+                  "  console.log('✅ candidateId2 (Bob):', body.data.candidate_id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Candidates",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/elections/{{electionId}}/positions/{{positionId}}/candidates", "host": ["{{baseUrl}}"], "path": ["elections", "{{electionId}}", "positions", "{{positionId}}", "candidates"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "🗂️ Voters (Closed Elections)",
+      "item": [
+        {
+          "name": "Add Voters (by email)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/elections/{{closedElectionId}}/voters", "host": ["{{baseUrl}}"], "path": ["elections", "{{closedElectionId}}", "voters"] },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emails\": [\n    \"voter1@test.com\",\n    \"voter2@test.com\",\n    \"voter3@test.com\"\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Voters added', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  const body = pm.response.json();",
+                  "  console.log('✅ Added:', body.data.added, '| Skipped:', body.data.skipped);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Import Voters (CSV)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/elections/{{closedElectionId}}/voters/import", "host": ["{{baseUrl}}"], "path": ["elections", "{{closedElectionId}}", "voters", "import"] },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"csv\": \"email\\nvoter4@test.com\\nvoter5@test.com\\nvoter6@test.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('CSV imported', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  const body = pm.response.json();",
+                  "  console.log('✅ Added:', body.data.added, '| Skipped:', body.data.skipped);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Voters",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/elections/{{closedElectionId}}/voters", "host": ["{{baseUrl}}"], "path": ["elections", "{{closedElectionId}}", "voters"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Listed voters', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  const body = pm.response.json();",
+                  "  console.log('Total voters:', body.data.length);",
+                  "  if (body.data.length > 0) {",
+                  "    pm.collectionVariables.set('voterId', body.data[0].voter_id);",
+                  "    console.log('✅ voterId set:', body.data[0].voter_id);",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send Invites (All)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/elections/{{closedElectionId}}/voters/send-invites", "host": ["{{baseUrl}}"], "path": ["elections", "{{closedElectionId}}", "voters", "send-invites"] },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Invites sent', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  const body = pm.response.json();",
+                  "  console.log('✅ Sent:', body.data.sent, '| Failed:', body.data.failed);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Voter",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/elections/{{closedElectionId}}/voters/{{voterId}}", "host": ["{{baseUrl}}"], "path": ["elections", "{{closedElectionId}}", "voters", "{{voterId}}"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "🗳️ Voting — Open Election",
+      "item": [
+        {
+          "name": "1. Get Public Election",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/public/elections/{{electionId}}", "host": ["{{baseUrl}}"], "path": ["public", "elections", "{{electionId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Got public election', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  const body = pm.response.json();",
+                  "  console.log('Status:', body.data.election.status);",
+                  "  console.log('Active position:', JSON.stringify(body.data.active_position, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Join Session (get anonymous token)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/vote/session", "host": ["{{baseUrl}}"], "path": ["vote", "session"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"election_id\": \"{{electionId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Session created', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('sessionToken', body.data.session_token);",
+                  "  console.log('✅ sessionToken:', body.data.session_token);",
+                  "  console.log('Active position:', JSON.stringify(body.data.active_position, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Cast Vote (for Alice)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/vote/cast", "host": ["{{baseUrl}}"], "path": ["vote", "cast"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"election_id\": \"{{electionId}}\",\n  \"position_id\": \"{{positionId}}\",\n  \"candidate_id\": \"{{candidateId}}\",\n  \"session_token\": \"{{sessionToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Vote cast', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  const body = pm.response.json();",
+                  "  console.log('✅ Vote count for Alice:', body.data.vote_count);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Try Voting Again (should fail)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/vote/cast", "host": ["{{baseUrl}}"], "path": ["vote", "cast"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"election_id\": \"{{electionId}}\",\n  \"position_id\": \"{{positionId}}\",\n  \"candidate_id\": \"{{candidateId2}}\",\n  \"session_token\": \"{{sessionToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Duplicate vote rejected (409)', function() {",
+                  "  pm.expect(pm.response.code).to.equal(409);",
+                  "  console.log('✅ Correctly rejected duplicate vote');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "🔒 Voting — Closed Election",
+      "item": [
+        {
+          "name": "1. Verify Invite Token",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/vote/verify-token?token={{inviteToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["vote", "verify-token"],
+              "query": [{ "key": "token", "value": "{{inviteToken}}" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Token verified', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  const body = pm.response.json();",
+                  "  console.log('Voter:', body.data.voter_id);",
+                  "  console.log('Active position:', JSON.stringify(body.data.active_position, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Cast Vote (Closed)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/vote/cast", "host": ["{{baseUrl}}"], "path": ["vote", "cast"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"election_id\": \"{{closedElectionId}}\",\n  \"position_id\": \"POSITION_ID_HERE\",\n  \"candidate_id\": \"CANDIDATE_ID_HERE\",\n  \"invite_token\": \"{{inviteToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Results",
+      "item": [
+        {
+          "name": "Get Results",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/results/{{electionId}}", "host": ["{{baseUrl}}"], "path": ["results", "{{electionId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Got results', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  const body = pm.response.json();",
+                  "  body.data.positions.forEach(p => {",
+                  "    console.log('\\nPosition:', p.position.title);",
+                  "    console.log('Total votes:', p.total_votes);",
+                  "    p.candidates.forEach(c => {",
+                  "      console.log(' -', c.name, ':', c.vote_count, 'votes (' + c.percentage + '%)');",
+                  "    });",
+                  "    if (p.winner) console.log('Winner:', p.winner.name);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

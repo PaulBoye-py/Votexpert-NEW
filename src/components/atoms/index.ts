@@ -42,3 +42,4 @@ export {
 } from './Skeleton';
 export { StatusDot } from './StatusDot';
 export { EmptyState } from './EmptyState';
+export { CircularCountdown } from './CircularCountdown';

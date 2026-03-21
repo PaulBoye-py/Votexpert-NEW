@@ -48,7 +48,7 @@ function AdminSettingsPage() {
 
   return (
     <AdminLayout
-      adminName={user?.username || 'Admin'}
+      adminName={user?.name || 'Admin'}
       adminEmail={user?.email}
       currentPath="/admin/settings"
       onNavigate={handleNavigate}
@@ -76,7 +76,7 @@ function AdminSettingsPage() {
               <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
-                defaultValue={user?.username || ''}
+                defaultValue={user?.name || ''}
                 placeholder="Enter username"
               />
             </div>

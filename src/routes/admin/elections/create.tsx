@@ -3,14 +3,15 @@ import { createRoute, useNavigate } from '@tanstack/react-router';
 import { useMutation } from '@tanstack/react-query';
 import { rootRoute } from '../../__root';
 import { AdminLayout } from '@/components/templates';
-import { ElectionForm, FileUpload } from '@/components/organisms';
 import { AlertMessage } from '@/components/molecules';
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms';
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Badge } from '@/components/atoms';
+import { FormField } from '@/components/molecules';
 import { createElection } from '@/api/services/admin.service';
-import { $user, $isAuthenticated, $isAdmin, logout } from '@/stores/auth.store';
+import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
-import { ArrowLeft, CheckCircle } from 'lucide-react';
-import type { Admin, CreateElectionPayload } from '@/types';
+import { ArrowLeft, CheckCircle, Globe, Lock, Trophy, Timer } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import type { Admin, ElectionType, LeaderboardMode } from '@/types';
 
 export const adminElectionsCreateRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -22,94 +23,59 @@ function CreateElectionPage() {
   const navigate = useNavigate();
   const user = useStore($user) as Admin | null;
   const isAuthenticated = useStore($isAuthenticated);
-  const isAdmin = useStore($isAdmin);
 
-  const [error, setError] = React.useState<string | undefined>();
-  const [candidatesCsv, setCandidatesCsv] = React.useState<string | null>(null);
-  const [votersCsv, setVotersCsv] = React.useState<string | null>(null);
-  const [createdElectionId, setCreatedElectionId] = React.useState<string | null>(null);
+  const [form, setForm] = React.useState({
+    title: '',
+    description: '',
+    type: 'OPEN' as ElectionType,
+    show_live_results: true,
+    leaderboard_mode: 'at_end' as LeaderboardMode,
+  });
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [apiError, setApiError] = React.useState<string | undefined>();
+  const [createdId, setCreatedId] = React.useState<string | null>(null);
 
-  // Redirect if not authenticated or not admin
   React.useEffect(() => {
-    if (!isAuthenticated || !isAdmin) {
-      navigate({ to: '/admin/login' });
-    }
-  }, [isAuthenticated, isAdmin, navigate]);
+    if (!isAuthenticated) navigate({ to: '/admin/login' });
+  }, [isAuthenticated, navigate]);
 
   const createMutation = useMutation({
-    mutationFn: createElection,
-    onSuccess: (data) => {
-      if (data.success) {
-        setCreatedElectionId(data.election_id);
-      } else {
-        setError(data.message || 'Failed to create election. Please try again.');
-      }
-    },
-    onError: (err: Error) => {
-      setError(err.message || 'An error occurred. Please try again.');
-    },
+    mutationFn: () =>
+      createElection({
+        title: form.title.trim(),
+        description: form.description.trim() || undefined,
+        type: form.type,
+        show_live_results: form.show_live_results,
+        leaderboard_mode: form.leaderboard_mode,
+      }),
+    onSuccess: (election) => setCreatedId(election.election_id),
+    onError: (err: Error) => setApiError(err.message),
   });
 
-  const handleLogout = () => {
-    logout();
-    navigate({ to: '/admin/login' });
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.title.trim()) e.title = 'Election title is required';
+    setErrors(e);
+    return !Object.keys(e).length;
   };
 
-  const handleNavigate = (path: string) => {
-    navigate({ to: path });
+  const handleSubmit = (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setApiError(undefined);
+    if (validate()) createMutation.mutate();
   };
 
-  const handleBack = () => {
-    navigate({ to: '/admin/elections' });
-  };
+  if (!isAuthenticated) return null;
 
-  const handleSubmit = (data: {
-    name: string;
-    description: string;
-    startTime: string;
-    endTime: string;
-    resultAnnouncementTime: string;
-    positions: string[];
-  }) => {
-    setError(undefined);
-
-    const payload: CreateElectionPayload = {
-      election_name: data.name,
-      description: data.description,
-      election_start_time: data.startTime,
-      election_end_time: data.endTime,
-      result_announcement_time: data.resultAnnouncementTime || undefined,
-      positions: JSON.stringify(
-        data.positions.map((pos) => ({ position_name: pos, max_candidates: 10 }))
-      ),
-      candidates_csv_base64: candidatesCsv || undefined,
-      voters_csv_base64: votersCsv || undefined,
-    };
-
-    createMutation.mutate(payload);
-  };
-
-  const handleCandidatesFile = (_file: File, base64: string) => {
-    setCandidatesCsv(base64);
-  };
-
-  const handleVotersFile = (_file: File, base64: string) => {
-    setVotersCsv(base64);
-  };
-
-  if (!isAuthenticated || !isAdmin) {
-    return null;
-  }
-
-  // Success state
-  if (createdElectionId) {
+  if (createdId) {
     return (
       <AdminLayout
-        adminName={user?.username || 'Admin'}
+        adminName={user?.name || 'Admin'}
         adminEmail={user?.email}
+        orgName={user?.org_name}
         currentPath="/admin/elections"
-        onNavigate={handleNavigate}
-        onLogout={handleLogout}
+        onNavigate={(path) => navigate({ to: path })}
+        onLogout={() => { logout(); navigate({ to: '/admin/login' }); }}
       >
         <div className="max-w-md mx-auto py-8">
           <Card>
@@ -121,32 +87,25 @@ function CreateElectionPage() {
                 Election Created!
               </CardTitle>
               <CardDescription>
-                Your election has been created successfully.
+                Now add positions and candidates to set it up.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-muted/50 rounded-lg p-4">
+              <div className="bg-muted/50 rounded-lg p-4 space-y-1">
                 <p className="text-sm text-muted-foreground">Election ID</p>
-                <p className="font-mono font-medium">{createdElectionId}</p>
+                <p className="font-mono text-sm font-medium break-all">{createdId}</p>
               </div>
               <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={handleBack}
-                  className="flex-1"
-                >
+                <Button variant="outline" onClick={() => navigate({ to: '/admin/elections' })} className="flex-1">
                   Back to Elections
                 </Button>
                 <Button
                   onClick={() =>
-                    navigate({
-                      to: '/admin/elections/$electionId',
-                      params: { electionId: createdElectionId },
-                    })
+                    navigate({ to: '/admin/elections/$electionId', params: { electionId: createdId } })
                   }
                   className="flex-1"
                 >
-                  View Election
+                  Set Up Election
                 </Button>
               </div>
             </CardContent>
@@ -158,61 +117,166 @@ function CreateElectionPage() {
 
   return (
     <AdminLayout
-      adminName={user?.username || 'Admin'}
+      adminName={user?.name || 'Admin'}
       adminEmail={user?.email}
+      orgName={user?.org_name}
       currentPath="/admin/elections"
-      onNavigate={handleNavigate}
-      onLogout={handleLogout}
+      onNavigate={(path) => navigate({ to: path })}
+      onLogout={() => { logout(); navigate({ to: '/admin/login' }); }}
     >
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Back button */}
-        <Button variant="ghost" onClick={handleBack} className="gap-2">
+      <div className="max-w-2xl mx-auto space-y-6">
+        <Button variant="ghost" onClick={() => navigate({ to: '/admin/elections' })} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
           Back to Elections
         </Button>
 
-        {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">Create Election</h1>
           <p className="text-muted-foreground">
-            Set up a new election with positions, candidates, and voters
+            Start with the basics — you'll add positions and candidates next.
           </p>
         </div>
 
-        {error && (
-          <AlertMessage variant="error">{error}</AlertMessage>
-        )}
+        {apiError && <AlertMessage variant="error">{apiError}</AlertMessage>}
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Election Form */}
-          <div className="lg:col-span-2">
-            <ElectionForm
-              onSubmit={handleSubmit}
-              isLoading={createMutation.isPending}
-              error={error}
-              mode="create"
-            />
-          </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Election Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <FormField
+                label="Election Title"
+                type="text"
+                placeholder="e.g. 2026 Board of Directors Election"
+                value={form.title}
+                onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+                error={errors.title}
+                disabled={createMutation.isPending}
+                required
+              />
 
-          {/* File Uploads */}
-          <FileUpload
-            title="Candidates CSV"
-            description="Upload a CSV file with candidate details"
-            accept=".csv"
-            maxSize={5}
-            onFileSelect={handleCandidatesFile}
-            successMessage={candidatesCsv ? 'Candidates file ready' : undefined}
-          />
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Description <span className="text-muted-foreground">(optional)</span></label>
+                <textarea
+                  placeholder="Describe the purpose of this election..."
+                  value={form.description}
+                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                  disabled={createMutation.isPending}
+                  rows={3}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
 
-          <FileUpload
-            title="Voters CSV"
-            description="Upload a CSV file with voter details"
-            accept=".csv"
-            maxSize={10}
-            onFileSelect={handleVotersFile}
-            successMessage={votersCsv ? 'Voters file ready' : undefined}
-          />
-        </div>
+              {/* Election Type */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Election Type</label>
+                <div className="grid grid-cols-2 gap-4">
+                  {([
+                    { value: 'OPEN', label: 'Open', icon: Globe, desc: 'Anyone with the link can vote. Great for live polls and public events.' },
+                    { value: 'CLOSED', label: 'Closed', icon: Lock, desc: 'Invite-only via email. Each voter gets a unique link.' },
+                  ] as const).map(({ value, label, icon: Icon, desc }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setForm((p) => ({ ...p, type: value }))}
+                      className={cn(
+                        'rounded-lg border-2 p-4 text-left transition-all',
+                        form.type === value
+                          ? 'border-green-500 bg-green-500/10'
+                          : 'border-border hover:border-green-500/50'
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon className={cn('h-4 w-4', form.type === value ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground')} />
+                        <span className="font-medium text-sm">{label}</span>
+                        {form.type === value && (
+                          <Badge className="ml-auto text-xs bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/30">Selected</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Leaderboard Mode */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Leaderboard Display</label>
+                <div className="grid grid-cols-2 gap-4">
+                  {([
+                    {
+                      value: 'after_each_position' as const,
+                      label: 'After each position',
+                      icon: Trophy,
+                      desc: 'Voters see a live leaderboard after submitting each vote.',
+                    },
+                    {
+                      value: 'at_end' as const,
+                      label: 'At the end',
+                      icon: Timer,
+                      desc: 'Results are hidden until the full election ends.',
+                    },
+                  ]).map(({ value, label, icon: Icon, desc }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setForm((p) => ({ ...p, leaderboard_mode: value }))}
+                      className={cn(
+                        'rounded-lg border-2 p-4 text-left transition-all',
+                        form.leaderboard_mode === value
+                          ? 'border-green-500 bg-green-500/10'
+                          : 'border-border hover:border-green-500/50'
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon className={cn('h-4 w-4', form.leaderboard_mode === value ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground')} />
+                        <span className="font-medium text-sm">{label}</span>
+                        {form.leaderboard_mode === value && (
+                          <Badge className="ml-auto text-xs bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/30">Selected</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Live Results Toggle */}
+              <div className="flex items-center justify-between rounded-lg border border-border p-4">
+                <div>
+                  <p className="text-sm font-medium">Show Live Results</p>
+                  <p className="text-xs text-muted-foreground">
+                    Broadcast vote counts in real-time on the admin dashboard
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.show_live_results ? 'true' : 'false'}
+                  aria-label="Toggle live results"
+                  title="Toggle live results"
+                  onClick={() => setForm((p) => ({ ...p, show_live_results: !p.show_live_results }))}
+                  className={cn(
+                    'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    form.show_live_results ? 'bg-primary' : 'bg-input'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
+                      form.show_live_results ? 'translate-x-6' : 'translate-x-1'
+                    )}
+                  />
+                </button>
+              </div>
+
+              <Button type="submit" className="w-full" disabled={createMutation.isPending}>
+                {createMutation.isPending ? 'Creating...' : 'Create Election'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </AdminLayout>
   );

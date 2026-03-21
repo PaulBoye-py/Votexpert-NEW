@@ -3,14 +3,29 @@ import { createRoute, useNavigate } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rootRoute } from '../../../__root';
 import { AdminLayout } from '@/components/templates';
-import { ElectionDetailsCard, CandidateList } from '@/components/organisms';
 import { AlertMessage } from '@/components/molecules';
-import { Button, Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/atoms';
-import { getElectionDetails, updateElectionStatus } from '@/api/services/admin.service';
-import { $user, $isAuthenticated, $isAdmin, logout } from '@/stores/auth.store';
+import { FormField } from '@/components/molecules';
+import {
+  Button, Card, CardContent, CardHeader, CardTitle, Badge,
+} from '@/components/atoms';
+import {
+  getElection, getPositions, createPosition, deletePosition,
+  getCandidates, createCandidate, deleteCandidate,
+  getVoters, addVoters, sendInvites, deleteVoter,
+  endElection, publishResults,
+  deleteElection,
+  getPresignedUploadUrl, uploadFileToS3,
+} from '@/api/services/admin.service';
+import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
-import { ArrowLeft, Play, Pause, BarChart3, CheckCircle } from 'lucide-react';
-import type { Admin, ElectionStatus, UpdateElectionStatusPayload } from '@/types';
+import {
+  ArrowLeft, Play, Square, Trophy, Plus, Trash2,
+  Users, Clock, Globe, Lock, BarChart3, Send, UserPlus, Copy, QrCode, ImagePlus, X as XIcon, AlertTriangle,
+} from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { cn } from '@/lib/utils';
+import { ELECTION_STATUS_COLORS, ELECTION_STATUS_LABELS, ELECTION_TYPE_LABELS } from '@/lib/constants';
+import type { Admin, Position, Candidate } from '@/types';
 
 export const adminElectionDetailsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -24,199 +39,739 @@ function AdminElectionDetailsPage() {
   const { electionId } = adminElectionDetailsRoute.useParams();
   const user = useStore($user) as Admin | null;
   const isAuthenticated = useStore($isAuthenticated);
-  const isAdmin = useStore($isAdmin);
-  const [error, setError] = React.useState<string | undefined>();
+  const [actionError, setActionError] = React.useState<string | undefined>();
 
-  // Redirect if not authenticated or not admin
+  // Position form
+  const [posForm, setPosForm] = React.useState({ title: '', duration_seconds: '120', description: '' });
+  const [showPosForm, setShowPosForm] = React.useState(false);
+
+  // Candidate form (per position)
+  const [activeCandPos, setActiveCandPos] = React.useState<string | null>(null);
+  const [candForm, setCandForm] = React.useState({ name: '', bio: '', photo_url: '' });
+  const [candPhotoFile, setCandPhotoFile] = React.useState<File | null>(null);
+  const [candPhotoPreview, setCandPhotoPreview] = React.useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = React.useState(false);
+
+  // QR code modal
+  const [showQr, setShowQr] = React.useState(false);
+
+  // Delete confirmation
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+
+  // Voter form (closed elections)
+  const [voterEmails, setVoterEmails] = React.useState('');
+  const [showVoterForm, setShowVoterForm] = React.useState(false);
+  const [voterMsg, setVoterMsg] = React.useState<string | undefined>();
+
   React.useEffect(() => {
-    if (!isAuthenticated || !isAdmin) {
-      navigate({ to: '/admin/login' });
-    }
-  }, [isAuthenticated, isAdmin, navigate]);
+    if (!isAuthenticated) navigate({ to: '/admin/login' });
+  }, [isAuthenticated, navigate]);
 
-  // Fetch election details
-  const { data, isLoading } = useQuery({
+  // ─── Queries ──────────────────────────────────────────────────────────────
+  const { data: election, isLoading: electionLoading } = useQuery({
     queryKey: ['admin', 'election', electionId],
-    queryFn: () => getElectionDetails(electionId),
-    enabled: isAuthenticated && isAdmin && !!electionId,
+    queryFn: () => getElection(electionId),
+    enabled: isAuthenticated,
   });
 
-  // Update status mutation
-  const statusMutation = useMutation({
-    mutationFn: (payload: UpdateElectionStatusPayload) =>
-      updateElectionStatus(electionId, payload),
+  const { data: positions = [], isLoading: positionsLoading } = useQuery({
+    queryKey: ['admin', 'election', electionId, 'positions'],
+    queryFn: () => getPositions(electionId),
+    enabled: isAuthenticated && !!election,
+  });
+
+  const { data: voters = [] } = useQuery({
+    queryKey: ['admin', 'election', electionId, 'voters'],
+    queryFn: () => getVoters(electionId),
+    enabled: isAuthenticated && election?.type === 'CLOSED',
+  });
+
+  // candidates per position
+  const candidateQueries = useQuery({
+    queryKey: ['admin', 'election', electionId, 'all-candidates'],
+    queryFn: async () => {
+      const results: Record<string, Candidate[]> = {};
+      await Promise.all(
+        positions.map(async (pos) => {
+          results[pos.position_id] = await getCandidates(electionId, pos.position_id);
+        })
+      );
+      return results;
+    },
+    enabled: positions.length > 0,
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['admin', 'election', electionId] });
+    queryClient.invalidateQueries({ queryKey: ['admin', 'elections'] });
+  };
+
+  // ─── Position mutations ────────────────────────────────────────────────────
+  const addPosMutation = useMutation({
+    mutationFn: () =>
+      createPosition(electionId, {
+        title: posForm.title.trim(),
+        description: posForm.description.trim() || undefined,
+        duration_seconds: parseInt(posForm.duration_seconds, 10),
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'election', electionId] });
-      setError(undefined);
+      setPosForm({ title: '', duration_seconds: '120', description: '' });
+      setShowPosForm(false);
+      invalidate();
     },
-    onError: (err: Error) => {
-      setError(err.message || 'Failed to update election status.');
-    },
+    onError: (err: Error) => setActionError(err.message),
   });
 
-  const handleLogout = () => {
-    logout();
-    navigate({ to: '/admin/login' });
-  };
+  const deletePosMutation = useMutation({
+    mutationFn: (positionId: string) => deletePosition(electionId, positionId),
+    onSuccess: invalidate,
+    onError: (err: Error) => setActionError(err.message),
+  });
 
-  const handleNavigate = (path: string) => {
-    navigate({ to: path });
-  };
+  // ─── Candidate mutations ───────────────────────────────────────────────────
+  const addCandMutation = useMutation({
+    mutationFn: async (positionId: string) => {
+      let photoUrl = candForm.photo_url || undefined;
+      if (candPhotoFile) {
+        setPhotoUploading(true);
+        try {
+          const { uploadUrl, fileUrl } = await getPresignedUploadUrl(candPhotoFile.name, candPhotoFile.type);
+          await uploadFileToS3(uploadUrl, candPhotoFile);
+          photoUrl = fileUrl;
+        } finally {
+          setPhotoUploading(false);
+        }
+      }
+      return createCandidate(electionId, positionId, {
+        name: candForm.name.trim(),
+        bio: candForm.bio.trim() || undefined,
+        photo_url: photoUrl,
+      });
+    },
+    onSuccess: () => {
+      setCandForm({ name: '', bio: '', photo_url: '' });
+      setCandPhotoFile(null);
+      setCandPhotoPreview(null);
+      setActiveCandPos(null);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'election', electionId, 'all-candidates'] });
+    },
+    onError: (err: Error) => setActionError(err.message),
+  });
 
-  const handleBack = () => {
-    navigate({ to: '/admin/elections' });
-  };
+  const deleteCandMutation = useMutation({
+    mutationFn: ({ positionId, candidateId }: { positionId: string; candidateId: string }) =>
+      deleteCandidate(electionId, positionId, candidateId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['admin', 'election', electionId, 'all-candidates'] }),
+    onError: (err: Error) => setActionError(err.message),
+  });
 
-  const handleViewStatistics = () => {
-    navigate({
-      to: '/admin/elections/$electionId/statistics',
-      params: { electionId },
-    });
-  };
+  // ─── Voter mutations ───────────────────────────────────────────────────────
+  const addVotersMutation = useMutation({
+    mutationFn: () => {
+      const emails = voterEmails.split(/[\n,;]/).map((e) => e.trim()).filter(Boolean);
+      return addVoters(electionId, emails);
+    },
+    onSuccess: (data) => {
+      setVoterMsg(`Added ${data.added} voter(s). ${data.skipped ? `${data.skipped} already existed.` : ''}`);
+      setVoterEmails('');
+      setShowVoterForm(false);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'election', electionId, 'voters'] });
+    },
+    onError: (err: Error) => setActionError(err.message),
+  });
 
-  const handleStatusChange = (newStatus: ElectionStatus) => {
-    statusMutation.mutate({ status: newStatus });
-  };
+  const sendInvitesMutation = useMutation({
+    mutationFn: () => sendInvites(electionId),
+    onSuccess: (data) => setVoterMsg(`Sent ${data.sent} invite(s).`),
+    onError: (err: Error) => setActionError(err.message),
+  });
 
-  const election = data?.election;
+  const deleteVoterMutation = useMutation({
+    mutationFn: (voterId: string) => deleteVoter(electionId, voterId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['admin', 'election', electionId, 'voters'] }),
+    onError: (err: Error) => setActionError(err.message),
+  });
 
-  // Transform positions for display
-  const positions = React.useMemo(() => {
-    // In a real implementation, this would come from candidates API
-    return [];
-  }, []);
+  // ─── Election lifecycle ────────────────────────────────────────────────────
+  const endMutation = useMutation({
+    mutationFn: () => endElection(electionId),
+    onSuccess: invalidate,
+    onError: (err: Error) => setActionError(err.message),
+  });
 
-  if (!isAuthenticated || !isAdmin) {
-    return null;
-  }
+  const publishMutation = useMutation({
+    mutationFn: () => publishResults(electionId),
+    onSuccess: invalidate,
+    onError: (err: Error) => setActionError(err.message),
+  });
 
-  const getStatusActions = () => {
-    if (!election) return null;
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteElection(electionId),
+    onSuccess: () => navigate({ to: '/admin/elections' }),
+    onError: (err: Error) => { setActionError(err.message); setConfirmDelete(false); },
+  });
 
-    switch (election.status) {
-      case 'draft':
-        return (
-          <Button onClick={() => handleStatusChange('active')}>
-            <Play className="mr-2 h-4 w-4" />
-            Activate Election
-          </Button>
-        );
-      case 'active':
-        return (
-          <div className="flex gap-2">
-            <Button onClick={() => handleStatusChange('ongoing')} variant="default">
-              <Play className="mr-2 h-4 w-4" />
-              Start Voting
-            </Button>
-            <Button onClick={() => handleStatusChange('cancelled')} variant="destructive">
-              Cancel
-            </Button>
-          </div>
-        );
-      case 'ongoing':
-        return (
-          <div className="flex gap-2">
-            <Button onClick={handleViewStatistics} variant="outline">
-              <BarChart3 className="mr-2 h-4 w-4" />
-              Live Statistics
-            </Button>
-            <Button onClick={() => handleStatusChange('concluded')} variant="secondary">
-              <Pause className="mr-2 h-4 w-4" />
-              End Voting
-            </Button>
-          </div>
-        );
-      case 'concluded':
-        return (
-          <Button onClick={() => handleStatusChange('results_announced')}>
-            <CheckCircle className="mr-2 h-4 w-4" />
-            Announce Results
-          </Button>
-        );
-      default:
-        return null;
-    }
-  };
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+  const isEditable = election?.status === 'DRAFT' || election?.status === 'SCHEDULED';
+  const electionCode = election?.election_code ?? '';
+  const voteUrl = electionCode
+    ? `${window.location.origin}/vote/join?code=${electionCode}`
+    : `${window.location.origin}/vote/join?election=${electionId}`;
+
+  const copyCode = () => navigator.clipboard.writeText(electionCode);
+
+  const statusBadge = election ? (
+    <Badge
+      className={cn(
+        'text-white text-xs',
+        ELECTION_STATUS_COLORS[election.status] ?? 'bg-gray-500'
+      )}
+    >
+      {ELECTION_STATUS_LABELS[election.status] ?? election.status}
+    </Badge>
+  ) : null;
+
+  if (!isAuthenticated) return null;
+
+  const isLoading = electionLoading || positionsLoading;
 
   return (
     <AdminLayout
-      adminName={user?.username || 'Admin'}
+      adminName={user?.name || 'Admin'}
       adminEmail={user?.email}
+      orgName={user?.org_name}
       currentPath="/admin/elections"
-      onNavigate={handleNavigate}
-      onLogout={handleLogout}
+      onNavigate={(path) => navigate({ to: path })}
+      onLogout={() => { logout(); navigate({ to: '/admin/login' }); }}
     >
       <div className="space-y-6">
-        {/* Back button */}
-        <Button variant="ghost" onClick={handleBack} className="gap-2">
+        <Button variant="ghost" onClick={() => navigate({ to: '/admin/elections' })} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
           Back to Elections
         </Button>
 
-        {error && (
-          <AlertMessage variant="error">{error}</AlertMessage>
+        {actionError && (
+          <AlertMessage variant="error" className="mb-2">
+            {actionError}
+          </AlertMessage>
         )}
 
         {isLoading ? (
-          <Card>
-            <CardContent className="p-8">
-              <p className="text-center text-muted-foreground">Loading election details...</p>
-            </CardContent>
-          </Card>
-        ) : election ? (
-          <>
-            {/* Election Details */}
-            <ElectionDetailsCard
-              name={election.election_name}
-              description={election.description}
-              status={election.status}
-              startTime={election.election_start_time}
-              endTime={election.election_end_time}
-              resultAnnouncementTime={election.result_announcement_time}
-              positions={election.positions?.map((p) => p.position_name)}
-              statistics={{
-                totalVoters: election.statistics?.total_voters || 0,
-                totalCandidates: election.statistics?.total_candidates || 0,
-                votesCast: election.statistics?.votes_cast || 0,
-                voterTurnout: election.statistics?.voter_turnout || 0,
-              }}
-            />
-
-            {/* Status Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Election Management</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-4 items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Current Status:</span>
-                  <Badge>{election.status}</Badge>
-                </div>
-                <div className="flex gap-2">
-                  {getStatusActions()}
-                  <Button onClick={handleViewStatistics} variant="outline">
-                    <BarChart3 className="mr-2 h-4 w-4" />
-                    Statistics
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Candidates */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Candidates</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CandidateList
-                  positions={positions}
-                  isLoading={false}
-                />
-              </CardContent>
-            </Card>
-          </>
-        ) : (
+          <Card><CardContent className="p-8 text-center text-muted-foreground">Loading…</CardContent></Card>
+        ) : !election ? (
           <AlertMessage variant="error">Election not found.</AlertMessage>
+        ) : (
+          <>
+            {/* ─── Overview ───────────────────────────────────────────────── */}
+            <Card>
+              <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div className="space-y-1 flex-1 min-w-0">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h1 className="text-2xl font-bold text-foreground truncate">{election.title}</h1>
+                    {statusBadge}
+                    <Badge variant="outline" className="text-xs gap-1">
+                      {election.type === 'OPEN' ? <Globe className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+                      {ELECTION_TYPE_LABELS[election.type]}
+                    </Badge>
+                  </div>
+                  {election.description && (
+                    <p className="text-muted-foreground text-sm">{election.description}</p>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* ── Share section — visible from DRAFT onwards ────────── */}
+                {election.status !== 'RESULTS_PUBLISHED' && electionCode && (
+                  <>
+                    <div className="rounded-xl border-2 border-green-500/30 bg-green-500/5 p-4 space-y-3">
+                      <p className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide">
+                        Share with voters
+                      </p>
+                      {/* Big code display */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Join code</p>
+                          <p className="font-mono text-4xl font-bold tracking-[0.3em] text-foreground">
+                            {electionCode}
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Button variant="outline" size="sm" onClick={copyCode} className="gap-1.5">
+                            <Copy className="h-3.5 w-3.5" />
+                            Copy code
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => setShowQr(true)} className="gap-1.5">
+                            <QrCode className="h-3.5 w-3.5" />
+                            QR Code
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Voters go to <span className="font-medium">votexpert.online</span> → Join as Voter → enter this code
+                      </p>
+                    </div>
+
+                    {/* QR modal */}
+                    {showQr && (
+                      <div
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                        onClick={() => setShowQr(false)}
+                      >
+                        <div
+                          className="bg-card border border-border rounded-xl p-6 space-y-4 w-full max-w-xs"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="font-semibold text-sm">Scan to join</p>
+                            <button type="button" onClick={() => setShowQr(false)} className="text-muted-foreground hover:text-foreground">
+                              <XIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="flex justify-center bg-white rounded-lg p-4">
+                            <QRCodeSVG value={voteUrl} size={200} />
+                          </div>
+                          <div className="text-center space-y-1">
+                            <p className="font-mono text-2xl font-bold tracking-[0.2em]">{electionCode}</p>
+                            <p className="text-xs text-muted-foreground">Scan or enter code at votexpert.online</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Action buttons */}
+                <div className="flex flex-wrap gap-3">
+                  {(election.status === 'DRAFT' || election.status === 'SCHEDULED') && (
+                    <Button
+                      className="bg-green-600 hover:bg-green-700 text-white gap-2"
+                      onClick={() => navigate({ to: '/admin/elections/$electionId/present', params: { electionId } })}
+                      disabled={positions.length === 0}
+                    >
+                      <Play className="h-4 w-4" />
+                      Open Presenter
+                    </Button>
+                  )}
+                  {election.status === 'ACTIVE' && (
+                    <>
+                      <Button
+                        className="bg-green-600 hover:bg-green-700 text-white gap-2"
+                        onClick={() => navigate({ to: '/admin/elections/$electionId/present', params: { electionId } })}
+                      >
+                        <BarChart3 className="mr-2 h-4 w-4" />
+                        Live Presenter
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => { setActionError(undefined); endMutation.mutate(); }}
+                        disabled={endMutation.isPending}
+                      >
+                        <Square className="mr-2 h-4 w-4" />
+                        {endMutation.isPending ? 'Ending…' : 'End Election'}
+                      </Button>
+                    </>
+                  )}
+                  {election.status === 'CLOSED' && (
+                    <Button
+                      onClick={() => { setActionError(undefined); publishMutation.mutate(); }}
+                      disabled={publishMutation.isPending}
+                    >
+                      <Trophy className="mr-2 h-4 w-4" />
+                      {publishMutation.isPending ? 'Publishing…' : 'Publish Results'}
+                    </Button>
+                  )}
+                  {election.status === 'RESULTS_PUBLISHED' && (
+                    <Button
+                      variant="outline"
+                      onClick={() => navigate({ to: '/results/$electionId', params: { electionId } })}
+                    >
+                      <Trophy className="mr-2 h-4 w-4" />
+                      View Results
+                    </Button>
+                  )}
+                </div>
+
+                {positions.length === 0 && election.status === 'DRAFT' && (
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    Add at least one position before opening the presenter.
+                  </p>
+                )}
+
+                {/* Delete election — only for DRAFT/SCHEDULED */}
+                {isEditable && (
+                  <div className="pt-2 border-t border-border">
+                    {!confirmDelete ? (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDelete(true)}
+                        className="flex items-center gap-1.5 text-sm text-destructive hover:text-destructive/80 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete this election
+                      </button>
+                    ) : (
+                      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-3">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-semibold text-destructive">Delete election?</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              This will permanently delete <span className="font-medium">"{election.title}"</span> including all positions and candidates. This cannot be undone.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => deleteMutation.mutate()}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                            {deleteMutation.isPending ? 'Deleting…' : 'Yes, delete'}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setConfirmDelete(false)}
+                            disabled={deleteMutation.isPending}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ─── Positions & Candidates ─────────────────────────────────── */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-muted-foreground" />
+                  Positions ({positions.length})
+                </CardTitle>
+                {isEditable && (
+                  <Button variant="outline" size="sm" onClick={() => setShowPosForm((v) => !v)} className="gap-1.5">
+                    <Plus className="h-4 w-4" />
+                    Add Position
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Add position form */}
+                {showPosForm && (
+                  <Card className="border-dashed">
+                    <CardContent className="pt-4 space-y-3">
+                      <FormField
+                        label="Position Title"
+                        type="text"
+                        placeholder="e.g. President"
+                        value={posForm.title}
+                        onChange={(e) => setPosForm((p) => ({ ...p, title: e.target.value }))}
+                        disabled={addPosMutation.isPending}
+                        required
+                      />
+                      <FormField
+                        label="Voting Duration (seconds)"
+                        type="number"
+                        placeholder="120"
+                        value={posForm.duration_seconds}
+                        onChange={(e) => setPosForm((p) => ({ ...p, duration_seconds: e.target.value }))}
+                        disabled={addPosMutation.isPending}
+                        required
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => { setActionError(undefined); addPosMutation.mutate(); }}
+                          disabled={addPosMutation.isPending || !posForm.title.trim()}
+                        >
+                          {addPosMutation.isPending ? 'Adding…' : 'Add Position'}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setShowPosForm(false)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {positions.length === 0 && !showPosForm && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No positions yet. Add a position to get started.
+                  </p>
+                )}
+
+                {positions
+                  .sort((a: Position, b: Position) => a.position_order - b.position_order)
+                  .map((pos: Position) => {
+                    const candidates: Candidate[] = candidateQueries.data?.[pos.position_id] ?? [];
+                    const isAddingCand = activeCandPos === pos.position_id;
+                    return (
+                      <div key={pos.position_id} className="rounded-lg border border-border overflow-hidden">
+                        {/* Position header */}
+                        <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
+                          <div>
+                            <span className="font-medium text-sm">{pos.title}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              {pos.duration_seconds}s · {candidates.length} candidate{candidates.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            {isEditable && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setActiveCandPos(isAddingCand ? null : pos.position_id)}
+                                  className="gap-1 h-7 text-xs"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                  Candidate
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => deletePosMutation.mutate(pos.position_id)}
+                                  className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Candidates */}
+                        {candidates.length > 0 && (
+                          <div className="divide-y divide-border">
+                            {candidates.map((c: Candidate) => (
+                              <div key={c.candidate_id} className="flex items-center justify-between px-4 py-2.5">
+                                <div className="flex items-center gap-3">
+                                  {c.photo_url ? (
+                                    <img src={c.photo_url} alt={c.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground shrink-0">
+                                      {c.name.charAt(0).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div>
+                                    <p className="text-sm font-medium">{c.name}</p>
+                                    {c.bio && <p className="text-xs text-muted-foreground">{c.bio}</p>}
+                                  </div>
+                                </div>
+                                {isEditable && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      deleteCandMutation.mutate({
+                                        positionId: pos.position_id,
+                                        candidateId: c.candidate_id,
+                                      })
+                                    }
+                                    className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Add candidate inline form */}
+                        {isAddingCand && (
+                          <div className="px-4 py-3 bg-muted/20 border-t border-border space-y-2">
+                            {/* Photo upload */}
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-medium text-muted-foreground">Photo (optional)</label>
+                              <div className="flex items-center gap-3">
+                                {candPhotoPreview ? (
+                                  <div className="relative w-12 h-12 shrink-0">
+                                    <img src={candPhotoPreview} alt="preview" className="w-12 h-12 rounded-full object-cover" />
+                                    <button
+                                      type="button"
+                                      onClick={() => { setCandPhotoFile(null); setCandPhotoPreview(null); }}
+                                      className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full flex items-center justify-center"
+                                    >
+                                      <XIcon className="h-2.5 w-2.5 text-white" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center shrink-0">
+                                    <ImagePlus className="h-5 w-5 text-muted-foreground" />
+                                  </div>
+                                )}
+                                <label className="cursor-pointer">
+                                  <span className="text-xs text-primary hover:underline">
+                                    {candPhotoFile ? 'Change photo' : 'Upload photo'}
+                                  </span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    disabled={addCandMutation.isPending}
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      setCandPhotoFile(file);
+                                      const reader = new FileReader();
+                                      reader.onload = (ev) => setCandPhotoPreview(ev.target?.result as string);
+                                      reader.readAsDataURL(file);
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            </div>
+
+                            <FormField
+                              label="Candidate Name"
+                              type="text"
+                              placeholder="Full name"
+                              value={candForm.name}
+                              onChange={(e) => setCandForm((p) => ({ ...p, name: e.target.value }))}
+                              disabled={addCandMutation.isPending}
+                              required
+                            />
+                            <FormField
+                              label="Short Bio (optional)"
+                              type="text"
+                              placeholder="e.g. Year 3, Computer Science"
+                              value={candForm.bio}
+                              onChange={(e) => setCandForm((p) => ({ ...p, bio: e.target.value }))}
+                              disabled={addCandMutation.isPending}
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setActionError(undefined);
+                                  addCandMutation.mutate(pos.position_id);
+                                }}
+                                disabled={addCandMutation.isPending || photoUploading || !candForm.name.trim()}
+                              >
+                                {photoUploading ? 'Uploading…' : addCandMutation.isPending ? 'Adding…' : 'Add'}
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => { setActiveCandPos(null); setCandPhotoFile(null); setCandPhotoPreview(null); }}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </CardContent>
+            </Card>
+
+            {/* ─── Voters (Closed elections only) ─────────────────────────── */}
+            {election.type === 'CLOSED' && (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-muted-foreground" />
+                    Voters ({voters.length})
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    {isEditable && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowVoterForm((v) => !v)}
+                        className="gap-1.5"
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        Add Voters
+                      </Button>
+                    )}
+                    {voters.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { setActionError(undefined); sendInvitesMutation.mutate(); }}
+                        disabled={sendInvitesMutation.isPending}
+                        className="gap-1.5"
+                      >
+                        <Send className="h-4 w-4" />
+                        {sendInvitesMutation.isPending ? 'Sending…' : 'Send Invites'}
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {voterMsg && <AlertMessage variant="info">{voterMsg}</AlertMessage>}
+
+                  {showVoterForm && (
+                    <Card className="border-dashed">
+                      <CardContent className="pt-4 space-y-3">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Email Addresses</label>
+                          <textarea
+                            placeholder="Enter emails separated by newline or comma&#10;e.g.&#10;alice@example.com&#10;bob@example.com"
+                            value={voterEmails}
+                            onChange={(e) => setVoterEmails(e.target.value)}
+                            rows={5}
+                            className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => { setActionError(undefined); addVotersMutation.mutate(); }}
+                            disabled={addVotersMutation.isPending || !voterEmails.trim()}
+                          >
+                            {addVotersMutation.isPending ? 'Adding…' : 'Add Voters'}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setShowVoterForm(false)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {voters.length === 0 && !showVoterForm ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No voters added yet.
+                    </p>
+                  ) : (
+                    <div className="rounded-lg border border-border divide-y divide-border">
+                      {voters.map((v) => (
+                        <div key={v.voter_id} className="flex items-center justify-between px-4 py-2.5">
+                          <div>
+                            <p className="text-sm">{v.email}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {v.voted_at
+                                ? `Voted ${new Date(v.voted_at).toLocaleString()}`
+                                : v.invite_sent_at
+                                ? `Invite sent ${new Date(v.invite_sent_at).toLocaleString()}`
+                                : 'Invite not sent'}
+                            </p>
+                          </div>
+                          {isEditable && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteVoterMutation.mutate(v.voter_id)}
+                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
       </div>
     </AdminLayout>

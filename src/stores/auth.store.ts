@@ -1,41 +1,38 @@
 import { atom, computed } from 'nanostores';
-import type { Admin, Voter, UserType, AuthTokens } from '@/types';
-import { TOKEN_STORAGE_KEY, USER_STORAGE_KEY } from '@/lib/constants';
+import type { Admin } from '@/types';
+import type { AuthTokens, VoterSession } from '@/types/auth.types';
+import { TOKEN_STORAGE_KEY, USER_STORAGE_KEY, VOTER_SESSION_KEY } from '@/lib/constants';
 
-// Token atoms
+// ─── Admin Auth ───────────────────────────────────────────────────────────────
+
 export const $accessToken = atom<string | null>(null);
 export const $refreshToken = atom<string | null>(null);
+export const $user = atom<Admin | null>(null);
 
-// User atoms
-export const $user = atom<Admin | Voter | null>(null);
-export const $userType = atom<UserType | null>(null);
-
-// Session token for OTP flow (temporary, not persisted)
-export const $sessionToken = atom<string | null>(null);
-export const $faceVerificationToken = atom<string | null>(null);
-
-// Computed values
 export const $isAuthenticated = computed(
   [$accessToken, $user],
   (token, user) => !!token && !!user
 );
 
-export const $isAdmin = computed(
-  [$userType],
-  (type) => type === 'admin'
+export const $isAdmin = computed([$isAuthenticated], (auth) => auth);
+
+// Legacy — voter flow is sessionToken-based, not user-based
+export const $userType = computed([$isAuthenticated], (auth) =>
+  auth ? ('admin' as const) : null
 );
 
-export const $isVoter = computed(
-  [$userType],
-  (type) => type === 'voter'
-);
+// ─── Voter Session (no login — just a session token for voting) ───────────────
 
-// Actions
+export const $voterSession = atom<VoterSession | null>(null);
+
+// ─── Pending Cognito Signup (between SignUp and ConfirmSignUp) ────────────────
+export const $pendingEmail = atom<string | null>(null);
+
+// ─── Actions ─────────────────────────────────────────────────────────────────
+
 export function setTokens(tokens: AuthTokens) {
   $accessToken.set(tokens.accessToken);
   $refreshToken.set(tokens.refreshToken);
-
-  // Persist to localStorage
   try {
     localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens));
   } catch (e) {
@@ -43,39 +40,44 @@ export function setTokens(tokens: AuthTokens) {
   }
 }
 
-export function setUser(user: Admin | Voter, type: UserType) {
+export function setUser(user: Admin) {
   $user.set(user);
-  $userType.set(type);
-
-  // Persist to localStorage
   try {
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify({ user, type }));
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
   } catch (e) {
     console.error('Failed to persist user:', e);
   }
 }
 
-export function setSessionToken(token: string | null) {
-  $sessionToken.set(token);
+export function setPendingEmail(email: string | null) {
+  $pendingEmail.set(email);
+  if (email) {
+    try { localStorage.setItem('votexpert_pending_email', email); } catch { /* */ }
+  } else {
+    try { localStorage.removeItem('votexpert_pending_email'); } catch { /* */ }
+  }
 }
 
-export function setFaceVerificationToken(token: string | null) {
-  $faceVerificationToken.set(token);
+export function setVoterSession(session: VoterSession | null) {
+  $voterSession.set(session);
+  try {
+    if (session) {
+      localStorage.setItem(VOTER_SESSION_KEY, JSON.stringify(session));
+    } else {
+      localStorage.removeItem(VOTER_SESSION_KEY);
+    }
+  } catch { /* */ }
 }
 
 export function logout() {
-  // Clear all auth state
   $accessToken.set(null);
   $refreshToken.set(null);
   $user.set(null);
-  $userType.set(null);
-  $sessionToken.set(null);
-  $faceVerificationToken.set(null);
-
-  // Clear localStorage
+  $pendingEmail.set(null);
   try {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem('votexpert_pending_email');
   } catch (e) {
     console.error('Failed to clear storage:', e);
   }
@@ -83,23 +85,26 @@ export function logout() {
 
 export function initializeAuth() {
   try {
-    // Restore tokens
     const tokensJson = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (tokensJson) {
       const tokens = JSON.parse(tokensJson) as AuthTokens;
       $accessToken.set(tokens.accessToken);
       $refreshToken.set(tokens.refreshToken);
     }
-
-    // Restore user
     const userJson = localStorage.getItem(USER_STORAGE_KEY);
     if (userJson) {
-      const { user, type } = JSON.parse(userJson) as { user: Admin | Voter; type: UserType };
-      $user.set(user);
-      $userType.set(type);
+      $user.set(JSON.parse(userJson) as Admin);
+    }
+    const pendingEmail = localStorage.getItem('votexpert_pending_email');
+    if (pendingEmail) {
+      $pendingEmail.set(pendingEmail);
+    }
+    const sessionJson = localStorage.getItem(VOTER_SESSION_KEY);
+    if (sessionJson) {
+      $voterSession.set(JSON.parse(sessionJson) as VoterSession);
     }
   } catch (e) {
     console.error('Failed to initialize auth:', e);
-    logout(); // Clear corrupted data
+    logout();
   }
 }

@@ -3,13 +3,13 @@ import { createRoute, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { rootRoute } from '../../../__root';
 import { AdminLayout } from '@/components/templates';
-import { DashboardStats } from '@/components/organisms';
 import { AlertMessage } from '@/components/molecules';
-import { Button, Card, CardContent, CardHeader, CardTitle, ProgressBar } from '@/components/atoms';
-import { getElectionStatistics } from '@/api/services/admin.service';
-import { $user, $isAuthenticated, $isAdmin, logout } from '@/stores/auth.store';
+import { Button, Card, CardContent, CardHeader, CardTitle, ProgressBar, CircularCountdown } from '@/components/atoms';
+import { getElection, getPositions, getVoters } from '@/api/services/admin.service';
+import { getPublicElection } from '@/api/services/voter.service';
+import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
-import { ArrowLeft, RefreshCw, Users, Vote, BarChart3, Clock, TrendingUp } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Users, Vote, Clock, TrendingUp } from 'lucide-react';
 import type { Admin } from '@/types';
 
 export const adminElectionStatisticsRoute = createRoute({
@@ -23,154 +23,226 @@ function ElectionStatisticsPage() {
   const { electionId } = adminElectionStatisticsRoute.useParams();
   const user = useStore($user) as Admin | null;
   const isAuthenticated = useStore($isAuthenticated);
-  const isAdmin = useStore($isAdmin);
 
-  // Redirect if not authenticated or not admin
   React.useEffect(() => {
-    if (!isAuthenticated || !isAdmin) {
-      navigate({ to: '/admin/login' });
-    }
-  }, [isAuthenticated, isAdmin, navigate]);
+    if (!isAuthenticated) navigate({ to: '/admin/login' });
+  }, [isAuthenticated, navigate]);
 
-  // Fetch statistics with auto-refresh
-  const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
-    queryKey: ['admin', 'election', electionId, 'statistics'],
-    queryFn: () => getElectionStatistics(electionId),
-    enabled: isAuthenticated && isAdmin && !!electionId,
-    refetchInterval: 30000, // Refresh every 30 seconds
+  const { data: election } = useQuery({
+    queryKey: ['admin', 'election', electionId],
+    queryFn: () => getElection(electionId),
+    enabled: isAuthenticated,
   });
 
-  const handleLogout = () => {
-    logout();
-    navigate({ to: '/admin/login' });
-  };
+  // Live vote counts — poll every 10s
+  const { data: publicData, isLoading, error, refetch, dataUpdatedAt } = useQuery({
+    queryKey: ['admin', 'election', electionId, 'live'],
+    queryFn: () => getPublicElection(electionId),
+    enabled: isAuthenticated && !!election,
+    refetchInterval: 3000,
+  });
 
-  const handleNavigate = (path: string) => {
-    navigate({ to: path });
-  };
+  const { data: voters = [] } = useQuery({
+    queryKey: ['admin', 'election', electionId, 'voters'],
+    queryFn: () => getVoters(electionId),
+    enabled: isAuthenticated && election?.type === 'CLOSED',
+  });
 
-  const handleBack = () => {
-    navigate({ to: '/admin/elections/$electionId', params: { electionId } });
-  };
+  const { data: positions = [] } = useQuery({
+    queryKey: ['admin', 'election', electionId, 'positions'],
+    queryFn: () => getPositions(electionId),
+    enabled: isAuthenticated,
+  });
 
-  const handleRefresh = () => {
-    refetch();
-  };
-
-  const stats = data?.statistics;
   const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'N/A';
 
-  if (!isAuthenticated || !isAdmin) {
-    return null;
-  }
+  // Compute live totals
+  const totalVotesCast = React.useMemo(() => {
+    if (!publicData?.positions) return 0;
+    return publicData.positions.reduce(
+      (sum, pos) => sum + pos.candidates.reduce((s, c) => s + c.vote_count, 0),
+      0
+    );
+  }, [publicData]);
 
-  const statsItems = stats
-    ? [
-        { label: 'Total Voters', value: stats.total_voters, icon: Users },
-        { label: 'Votes Cast', value: stats.votes_cast, icon: Vote },
-        { label: 'Pending Votes', value: stats.pending_votes, icon: Clock },
-        {
-          label: 'Turnout',
-          value: `${stats.turnout_percentage.toFixed(1)}%`,
-          icon: TrendingUp,
-        },
-      ]
-    : [];
+  const totalVoters = voters.length;
+  const turnout = totalVoters > 0 ? Math.round((totalVotesCast / totalVoters) * 100) : 0;
+
+  const activePosition = publicData?.active_position;
+
+  // Local countdown that ticks every second, seeded from server value on each poll
+  const [countdown, setCountdown] = React.useState<number>(0);
+  React.useEffect(() => {
+    if (activePosition?.seconds_remaining !== undefined) {
+      setCountdown(activePosition.seconds_remaining);
+    }
+  }, [activePosition?.seconds_remaining]);
+  React.useEffect(() => {
+    if (countdown <= 0) return;
+    const id = setInterval(() => setCountdown((s) => Math.max(0, +(s - 0.1).toFixed(1))), 100);
+    return () => clearInterval(id);
+  }, [countdown]);
+
+  if (!isAuthenticated) return null;
 
   return (
     <AdminLayout
-      adminName={user?.username || 'Admin'}
+      adminName={user?.name || 'Admin'}
       adminEmail={user?.email}
+      orgName={user?.org_name}
       currentPath="/admin/elections"
-      onNavigate={handleNavigate}
-      onLogout={handleLogout}
+      onNavigate={(path) => navigate({ to: path })}
+      onLogout={() => { logout(); navigate({ to: '/admin/login' }); }}
     >
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={handleBack} className="gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => navigate({ to: '/admin/elections/$electionId', params: { electionId } })}
+              className="gap-2"
+            >
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-foreground">Live Statistics</h1>
-              <p className="text-sm text-muted-foreground">
-                Last updated: {lastUpdated}
-              </p>
+              <p className="text-sm text-muted-foreground">Last updated: {lastUpdated}</p>
             </div>
           </div>
-          <Button onClick={handleRefresh} variant="outline" className="gap-2">
+          <Button onClick={() => refetch()} variant="outline" className="gap-2">
             <RefreshCw className="h-4 w-4" />
             Refresh
           </Button>
         </div>
 
         {error && (
-          <AlertMessage variant="error">
-            Failed to load statistics. Please try again.
-          </AlertMessage>
+          <AlertMessage variant="error">Failed to load live data. Please refresh.</AlertMessage>
         )}
 
-        {/* Stats Overview */}
-        <DashboardStats stats={statsItems} isLoading={isLoading} />
+        {/* Overview cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: 'Total Voters', value: totalVoters || '—', icon: Users },
+            { label: 'Votes Cast', value: totalVotesCast, icon: Vote },
+            { label: 'Positions', value: positions.length, icon: Clock },
+            { label: 'Turnout', value: totalVoters > 0 ? `${turnout}%` : '—', icon: TrendingUp },
+          ].map(({ label, value, icon: Icon }) => (
+            <Card key={label}>
+              <CardContent className="pt-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{isLoading ? '…' : value}</p>
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
-        {/* Turnout Progress */}
-        {stats && (
+        {/* Turnout progress (closed elections only) */}
+        {totalVoters > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Voter Turnout</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <ProgressBar
+                value={turnout}
+                showLabel
+                size="lg"
+                variant={turnout >= 50 ? 'success' : 'default'}
+              />
+              <p className="text-sm text-muted-foreground text-center">
+                {totalVotesCast} of {totalVoters} voters have participated
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Active position */}
+        {activePosition && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5" />
-                Voter Turnout Progress
+                <Clock className="h-5 w-5 text-green-500" />
+                Now Voting: {activePosition.position.title}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <ProgressBar
-                value={stats.turnout_percentage}
-                showLabel
-                size="lg"
-                variant={stats.turnout_percentage >= 50 ? 'success' : 'default'}
-              />
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.votes_cast}</p>
-                  <p className="text-sm text-muted-foreground">Votes Cast</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.pending_votes}</p>
-                  <p className="text-sm text-muted-foreground">Pending</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.total_voters}</p>
-                  <p className="text-sm text-muted-foreground">Total Eligible</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Votes by Position */}
-        {stats && stats.votes_by_position && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Votes by Position</CardTitle>
-            </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {Object.entries(stats.votes_by_position).map(([position, votes]) => (
-                  <div key={position} className="flex items-center justify-between">
-                    <span className="font-medium text-foreground">{position}</span>
-                    <span className="text-muted-foreground">{votes} votes</span>
-                  </div>
-                ))}
+              <div className="flex flex-col sm:flex-row items-center gap-6">
+                <CircularCountdown
+                  seconds={countdown}
+                  total={activePosition.position.duration_seconds}
+                  size={160}
+                />
+                <div className="space-y-1 text-center sm:text-left">
+                  <p className="text-sm text-muted-foreground">Position</p>
+                  <p className="font-semibold text-lg">{activePosition.position.title}</p>
+                  {countdown <= 30 && countdown > 0 && (
+                    <p className="text-sm text-destructive animate-pulse font-medium">Closing soon</p>
+                  )}
+                  {countdown === 0 && (
+                    <p className="text-sm text-muted-foreground">Waiting for next position…</p>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Auto-refresh notice */}
+        {/* Live vote counts per position */}
+        {publicData?.positions.map((pos) => {
+          const totalPosVotes = pos.candidates.reduce((s, c) => s + c.vote_count, 0);
+          return (
+            <Card key={pos.position_id}>
+              <CardHeader>
+                <CardTitle className="text-base">{pos.title}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {pos.candidates
+                  .sort((a, b) => b.vote_count - a.vote_count)
+                  .map((c) => {
+                    const pct = totalPosVotes > 0
+                      ? Math.round((c.vote_count / totalPosVotes) * 100)
+                      : 0;
+                    return (
+                      <div key={c.candidate_id} className="space-y-1.5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 bg-muted">
+                            {c.photo_url ? (
+                              <img src={c.photo_url} alt={c.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-xs font-bold text-muted-foreground">
+                                {c.name.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between text-sm mb-1">
+                              <span className="font-medium truncate">{c.name}</span>
+                              <span className="text-muted-foreground shrink-0 ml-2">{c.vote_count} · {pct}%</span>
+                            </div>
+                            <ProgressBar value={pct} size="sm" />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                {pos.candidates.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No candidates</p>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+
         <p className="text-sm text-muted-foreground text-center">
-          Statistics automatically refresh every 30 seconds
+          Automatically refreshes every 10 seconds
         </p>
       </div>
     </AdminLayout>
