@@ -11,7 +11,7 @@ import { createRoute, useNavigate, useSearch, redirect } from '@tanstack/react-r
 import { rootRoute } from '../../__root';
 import { AlertMessage } from '@/components/molecules';
 import { Button } from '@/components/atoms';
-import { verifyInviteToken } from '@/api/services/voter.service';
+import { verifyInviteToken, joinLobby } from '@/api/services/voter.service';
 import { setVoterSession } from '@/stores/auth.store';
 import { Loader2 } from 'lucide-react';
 
@@ -44,26 +44,39 @@ function InviteTokenHandler() {
     if (!token) return;
 
     verifyInviteToken(token)
-      .then((data) => {
-        // Store the invite token in the voter session — ballot.tsx will use
-        // this to authenticate every vote cast.
+      .then(async (data) => {
+        const status = data.election.status;
+
+        if (status === 'RESULTS_PUBLISHED') {
+          navigate({ to: '/results/$electionId', params: { electionId } });
+          return;
+        }
+        if (status === 'CLOSED') {
+          setError('This election has ended and results are not yet published.');
+          return;
+        }
+
+        if (status === 'ACTIVE') {
+          // Already live — store session and go straight to ballot
+          setVoterSession({
+            session_token: '',
+            invite_token: token,
+            election_id: electionId,
+          });
+          navigate({ to: '/vote/$electionId/ballot', params: { electionId } });
+          return;
+        }
+
+        // DRAFT or SCHEDULED — join lobby first so the presenter can see us
+        const lobby = await joinLobby(electionId);
         setVoterSession({
           session_token: '',
           invite_token: token,
           election_id: electionId,
+          participant_id: lobby.participant_id,
+          display_name: lobby.display_name,
         });
-
-        const status = data.election.status;
-        if (status === 'ACTIVE') {
-          navigate({ to: '/vote/$electionId/ballot', params: { electionId } });
-        } else if (status === 'RESULTS_PUBLISHED') {
-          navigate({ to: '/results/$electionId', params: { electionId } });
-        } else if (status === 'CLOSED') {
-          setError('This election has ended and results are not yet published.');
-        } else {
-          // DRAFT or SCHEDULED — wait in lobby
-          navigate({ to: '/vote/$electionId/lobby', params: { electionId } });
-        }
+        navigate({ to: '/vote/$electionId/lobby', params: { electionId } });
       })
       .catch((err: Error) => setError(err.message));
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -12,7 +12,13 @@
       "Bash(AWS_PROFILE=paul-arthurite AWS_DEFAULT_REGION=us-east-1 npx cdk deploy --all --context env=dev --require-approval never)",
       "Bash(grep -rn \"voted\\\\|voter_count\\\\|/ 0\\\\|turnout\" /Users/aderoju/Documents/Projects/arthurite/Votexpert-NEW/src/routes/admin --include=*.tsx)",
       "Bash(grep -n \"voteElectionRedirect\\\\|vote/$electionId\" /Users/aderoju/Documents/Projects/arthurite/Votexpert-NEW/src/routes/routeTree.gen.ts)",
-      "Read(//Users/aderoju/Documents/Projects/arthurite/Votexpert-NEW/src/routes/admin/elections/$electionId/**)"
+      "Read(//Users/aderoju/Documents/Projects/arthurite/Votexpert-NEW/src/routes/admin/elections/$electionId/**)",
+      "Bash(grep -n \"env=prod\\\\|env.*prod\\\\|stackName\\\\|VotexpertApi\\\\|VotexpertAuth\\\\|VotexpertDatabase\" /Users/aderoju/Documents/Projects/arthurite/Votexpert-NEW/backend/bin/*.ts)",
+      "Bash(cat /Users/aderoju/Documents/Projects/arthurite/Votexpert-NEW/backend/bin/*.ts)",
+      "Bash(SMTP_HOST=smtp.resend.com SMTP_PORT=465 SMTP_USER=resend SMTP_PASS=re_b6fvG7A1_4W1DWoohB9FRHN7u992GmuHY EMAIL_FROM=noreply@votexpert.com npm run deploy)",
+      "Bash(SMTP_HOST=smtp.resend.com SMTP_PORT=465 SMTP_USER=resend SMTP_PASS=re_b6fvG7A1_4W1DWoohB9FRHN7u992GmuHY EMAIL_FROM=noreply@votexpert.online npm run deploy)",
+      "Bash(SMTP_HOST=smtp.resend.com SMTP_PORT=465 SMTP_USER=resend SMTP_PASS=re_b6fvG7A1_4W1DWoohB9FRHN7u992GmuHY EMAIL_FROM=noreply@contact.votexpert.online npm run deploy)",
+      "Bash(SMTP_HOST=smtp.resend.com SMTP_PORT=465 SMTP_USER=resend SMTP_PASS=re_b6fvG7A1_4W1DWoohB9FRHN7u992GmuHY EMAIL_FROM=noreply@contact.votexpert.online APP_URL=https://votexpert.online npm run deploy)"
     ]
   }
 }
