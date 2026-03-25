@@ -52,11 +52,20 @@ resultsRouter.get('/:electionId', async (req: Request, res: Response) => {
       const total = candidates.reduce((s, c) => s + c.vote_count, 0)
       totalVotesCast += total
 
+      const candidatesWithPct = candidates.map(c => ({
+        ...c,
+        percentage: total > 0 ? Math.round((c.vote_count / total) * 1000) / 10 : 0,
+      }))
+
+      const topVotes = candidatesWithPct[0]?.vote_count ?? 0
+      const isTie = topVotes > 0 && candidatesWithPct.filter(c => c.vote_count === topVotes).length > 1
+
       return {
         position: pos,
-        candidates: candidates.map(c => ({ ...c, percentage: total > 0 ? Math.round((c.vote_count / total) * 1000) / 10 : 0 })),
+        candidates: candidatesWithPct,
         total_votes: total,
-        winner: candidates[0]?.vote_count > 0 ? candidates[0] : undefined,
+        winner: isTie || topVotes === 0 ? undefined : candidatesWithPct[0],
+        is_tie: isTie,
       }
     })
 

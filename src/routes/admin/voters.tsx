@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rootRoute } from '../__root';
 import { AdminLayout } from '@/components/templates';
 import { AlertMessage } from '@/components/molecules';
-import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/atoms';
+import { Button, Card, CardContent, CardHeader, CardTitle} from '@/components/atoms';
 import { getOrgVoters, addOrgVoters, deleteOrgVoter } from '@/api/services/admin.service';
 import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';

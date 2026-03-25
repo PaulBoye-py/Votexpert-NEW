@@ -21,7 +21,7 @@ import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
 import {
   ArrowLeft, Play, Square, Trophy, Plus, Trash2,
-  Users, Clock, Globe, Lock, BarChart3, Send, UserPlus, Copy, QrCode, ImagePlus, X as XIcon, AlertTriangle,
+  Users, Clock, Globe, Lock, BarChart3, Send, UserPlus, Copy, QrCode, ImagePlus, X as XIcon, AlertTriangle, Calendar,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '@/lib/utils';
@@ -123,7 +123,8 @@ function AdminElectionDetailsPage() {
       createPosition(electionId, {
         title: posForm.title.trim(),
         description: posForm.description.trim() || undefined,
-        duration_seconds: parseInt(posForm.duration_seconds, 10),
+        // Scheduled elections: duration is unused (all positions open simultaneously)
+        duration_seconds: isScheduledMode ? 0 : parseInt(posForm.duration_seconds, 10),
       }),
     onSuccess: () => {
       setPosForm({ title: '', duration_seconds: '120', description: '' });
@@ -233,6 +234,7 @@ function AdminElectionDetailsPage() {
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
   const isEditable = election?.status === 'DRAFT' || election?.status === 'SCHEDULED';
+  const isScheduledMode = !!election?.scheduled_end_at;
   const electionCode = election?.election_code ?? '';
   const voteUrl = electionCode
     ? `${window.location.origin}/vote/join?code=${electionCode}`
@@ -374,9 +376,37 @@ function AdminElectionDetailsPage() {
                   </>
                 )}
 
+                {/* Scheduled election info banner */}
+                {isScheduledMode && election.scheduled_start_at && (
+                  <div className="rounded-xl border-2 border-blue-500/30 bg-blue-500/5 p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                      <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wide">
+                        Scheduled Election — Automatic
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                      <div>
+                        <p className="font-medium text-foreground">Starts</p>
+                        <p>{new Date(election.scheduled_start_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                      </div>
+                      {election.scheduled_end_at && (
+                        <div>
+                          <p className="font-medium text-foreground">Ends</p>
+                          <p>{new Date(election.scheduled_end_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      This election starts and ends automatically. No presenter mode needed — all positions open simultaneously during the window.
+                    </p>
+                  </div>
+                )}
+
                 {/* Action buttons */}
                 <div className="flex flex-wrap gap-3">
-                  {(election.status === 'DRAFT' || election.status === 'SCHEDULED') && (
+                  {/* Immediate elections only: presenter mode */}
+                  {!isScheduledMode && (election.status === 'DRAFT' || election.status === 'SCHEDULED') && (
                     <Button
                       className="bg-green-600 hover:bg-green-700 text-white gap-2"
                       onClick={() => navigate({ to: '/admin/elections/$electionId/present', params: { electionId } })}
@@ -386,24 +416,25 @@ function AdminElectionDetailsPage() {
                       Open Presenter
                     </Button>
                   )}
+                  {!isScheduledMode && election.status === 'ACTIVE' && (
+                    <Button
+                      className="bg-green-600 hover:bg-green-700 text-white gap-2"
+                      onClick={() => navigate({ to: '/admin/elections/$electionId/present', params: { electionId } })}
+                    >
+                      <BarChart3 className="mr-2 h-4 w-4" />
+                      Live Presenter
+                    </Button>
+                  )}
+                  {/* End election — available for all ACTIVE elections */}
                   {election.status === 'ACTIVE' && (
-                    <>
-                      <Button
-                        className="bg-green-600 hover:bg-green-700 text-white gap-2"
-                        onClick={() => navigate({ to: '/admin/elections/$electionId/present', params: { electionId } })}
-                      >
-                        <BarChart3 className="mr-2 h-4 w-4" />
-                        Live Presenter
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() => { setActionError(undefined); endMutation.mutate(); }}
-                        disabled={endMutation.isPending}
-                      >
-                        <Square className="mr-2 h-4 w-4" />
-                        {endMutation.isPending ? 'Ending…' : 'End Election'}
-                      </Button>
-                    </>
+                    <Button
+                      variant="destructive"
+                      onClick={() => { setActionError(undefined); endMutation.mutate(); }}
+                      disabled={endMutation.isPending}
+                    >
+                      <Square className="mr-2 h-4 w-4" />
+                      {endMutation.isPending ? 'Ending…' : isScheduledMode ? 'End Early' : 'End Election'}
+                    </Button>
                   )}
                   {election.status === 'CLOSED' && (
                     <Button
@@ -425,7 +456,7 @@ function AdminElectionDetailsPage() {
                   )}
                 </div>
 
-                {positions.length === 0 && election.status === 'DRAFT' && (
+                {!isScheduledMode && positions.length === 0 && election.status === 'DRAFT' && (
                   <p className="text-sm text-amber-600 dark:text-amber-400">
                     Add at least one position before opening the presenter.
                   </p>
@@ -508,15 +539,17 @@ function AdminElectionDetailsPage() {
                         disabled={addPosMutation.isPending}
                         required
                       />
-                      <FormField
-                        label="Voting Duration (seconds)"
-                        type="number"
-                        placeholder="120"
-                        value={posForm.duration_seconds}
-                        onChange={(e) => setPosForm((p) => ({ ...p, duration_seconds: e.target.value }))}
-                        disabled={addPosMutation.isPending}
-                        required
-                      />
+                      {!isScheduledMode && (
+                        <FormField
+                          label="Voting Duration (seconds)"
+                          type="number"
+                          placeholder="120"
+                          value={posForm.duration_seconds}
+                          onChange={(e) => setPosForm((p) => ({ ...p, duration_seconds: e.target.value }))}
+                          disabled={addPosMutation.isPending}
+                          required
+                        />
+                      )}
                       <div className="flex gap-2">
                         <Button
                           size="sm"
