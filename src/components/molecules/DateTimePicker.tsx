@@ -68,12 +68,38 @@ export function DateTimePicker({
     if (!date) return;
     const d = new Date(date);
     d.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
-    onChange(d.toISOString().slice(0, 16)); // "YYYY-MM-DDTHH:mm" — matches datetime-local format
+    onChange(d.toISOString().slice(0, 16)); // "YYYY-MM-DDTHH:mm"
+  };
+
+  /** Returns now + 5 minutes as { h, m } strings */
+  const nowPlus5 = () => {
+    const t = new Date(Date.now() + 5 * 60 * 1000);
+    return {
+      h: String(t.getHours()).padStart(2, '0'),
+      m: String(t.getMinutes()).padStart(2, '0'),
+    };
+  };
+
+  const isToday = (date: Date) => {
+    const now = new Date();
+    return date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth() &&
+      date.getDate() === now.getDate();
   };
 
   const handleDaySelect = (day: Date | undefined) => {
-    emitChange(day, hour, minute);
-    // Don't close — let user pick time too
+    if (!day) return;
+    let h = hour;
+    let m = minute;
+    // When picking today, snap time to now + 5 min so it's always valid
+    if (isToday(day)) {
+      const plus5 = nowPlus5();
+      h = plus5.h;
+      m = plus5.m;
+      setHour(h);
+      setMinute(m);
+    }
+    emitChange(day, h, m);
   };
 
   const handleHour = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -135,7 +161,11 @@ export function DateTimePicker({
             mode="single"
             selected={selectedDate}
             onSelect={handleDaySelect}
-            disabled={minDate ? (date) => date < minDate : undefined}
+            disabled={minDate ? (date) => {
+                const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                const min = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate());
+                return d < min;
+              } : undefined}
             initialFocus
             classNames={{
               day: cn(
