@@ -6,7 +6,7 @@
  *   onChange     — called with new ISO string on any change
  *   label        — field label shown above the trigger
  *   placeholder  — text shown when nothing is selected
- *   minDate      — earliest selectable date (optional)
+ *   minDate      — earliest selectable date/time (optional)
  *   error        — validation error message (optional)
  *   disabled     — disables the picker (optional)
  */
@@ -32,7 +32,19 @@ function formatDisplay(iso: string): string {
   if (isNaN(d.getTime())) return '';
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
     + ' · '
-    + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+function toLocalISO(d: Date) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function isSameCalendarDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
 }
 
 export function DateTimePicker({
@@ -50,75 +62,100 @@ export function DateTimePicker({
   const parsed = value ? new Date(value) : null;
   const selectedDate: Date | undefined = parsed && !isNaN(parsed.getTime()) ? parsed : undefined;
   const [hour, setHour] = React.useState(() =>
-    selectedDate ? String(selectedDate.getHours()).padStart(2, '0') : '09'
+    selectedDate ? pad(selectedDate.getHours()) : '09'
   );
   const [minute, setMinute] = React.useState(() =>
-    selectedDate ? String(selectedDate.getMinutes()).padStart(2, '0') : '00'
+    selectedDate ? pad(selectedDate.getMinutes()) : '00'
   );
 
   // Sync hour/minute when value changes externally
   React.useEffect(() => {
     if (selectedDate) {
-      setHour(String(selectedDate.getHours()).padStart(2, '0'));
-      setMinute(String(selectedDate.getMinutes()).padStart(2, '0'));
+      setHour(pad(selectedDate.getHours()));
+      setMinute(pad(selectedDate.getMinutes()));
     }
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Emit a local-time ISO string, clamping to minDate + 1 min if needed */
   const emitChange = (date: Date | undefined, h: string, m: string) => {
     if (!date) return;
     const d = new Date(date);
-    d.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
-    // Format in local time to avoid UTC offset shifting the value
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const localISO = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    onChange(localISO);
+    d.setHours(parseInt(h, 10) || 0, parseInt(m, 10) || 0, 0, 0);
+
+    // Enforce minimum datetime — snap forward 1 minute past minDate
+    if (minDate && d <= minDate) {
+      const snapped = new Date(minDate.getTime() + 60 * 1000);
+      d.setTime(snapped.getTime());
+      setHour(pad(snapped.getHours()));
+      setMinute(pad(snapped.getMinutes()));
+    }
+
+    onChange(toLocalISO(d));
   };
 
   /** Returns now + 5 minutes as { h, m } strings */
   const nowPlus5 = () => {
     const t = new Date(Date.now() + 5 * 60 * 1000);
-    return {
-      h: String(t.getHours()).padStart(2, '0'),
-      m: String(t.getMinutes()).padStart(2, '0'),
-    };
-  };
-
-  const isToday = (date: Date) => {
-    const now = new Date();
-    return date.getFullYear() === now.getFullYear() &&
-      date.getMonth() === now.getMonth() &&
-      date.getDate() === now.getDate();
+    return { h: pad(t.getHours()), m: pad(t.getMinutes()) };
   };
 
   const handleDaySelect = (day: Date | undefined) => {
     if (!day) return;
     let h = hour;
     let m = minute;
-    // When picking today, snap time to now + 5 min so it's always valid
-    if (isToday(day)) {
+
+    const now = new Date();
+    if (isSameCalendarDay(day, now)) {
+      // Today — snap to now + 5 min
       const plus5 = nowPlus5();
       h = plus5.h;
       m = plus5.m;
       setHour(h);
       setMinute(m);
+    } else if (minDate && isSameCalendarDay(day, minDate)) {
+      // Same day as minDate — snap to minDate + 1 min
+      const snapped = new Date(minDate.getTime() + 60 * 1000);
+      h = pad(snapped.getHours());
+      m = pad(snapped.getMinutes());
+      setHour(h);
+      setMinute(m);
     }
+
     emitChange(day, h, m);
   };
 
+  // Allow intermediate typing (e.g. "1" before typing "2" → "12")
+  // Only clamp + emit when 2 digits are entered; normalize on blur
   const handleHour = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value.replace(/\D/g, '').slice(0, 2);
-    const clamped = Math.min(23, parseInt(v || '0', 10));
-    const formatted = String(clamped).padStart(2, '0');
-    setHour(formatted);
-    emitChange(selectedDate, formatted, minute);
+    const raw = e.target.value.replace(/\D/g, '').slice(0, 2);
+    setHour(raw);
+    if (raw.length === 2) {
+      const clamped = pad(Math.min(23, parseInt(raw, 10)));
+      setHour(clamped);
+      emitChange(selectedDate, clamped, minute);
+    }
+  };
+
+  const handleHourBlur = () => {
+    const clamped = pad(Math.min(23, parseInt(hour || '0', 10)));
+    setHour(clamped);
+    emitChange(selectedDate, clamped, minute);
   };
 
   const handleMinute = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value.replace(/\D/g, '').slice(0, 2);
-    const clamped = Math.min(59, parseInt(v || '0', 10));
-    const formatted = String(clamped).padStart(2, '0');
-    setMinute(formatted);
-    emitChange(selectedDate, hour, formatted);
+    const raw = e.target.value.replace(/\D/g, '').slice(0, 2);
+    setMinute(raw);
+    if (raw.length === 2) {
+      const clamped = pad(Math.min(59, parseInt(raw, 10)));
+      setMinute(clamped);
+      emitChange(selectedDate, hour, clamped);
+    }
+  };
+
+  const handleMinuteBlur = () => {
+    const clamped = pad(Math.min(59, parseInt(minute || '0', 10)));
+    setMinute(clamped);
+    emitChange(selectedDate, hour, clamped);
   };
 
   const display = formatDisplay(value);
@@ -165,10 +202,10 @@ export function DateTimePicker({
             selected={selectedDate}
             onSelect={handleDaySelect}
             disabled={minDate ? (date) => {
-                const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                const min = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate());
-                return d < min;
-              } : undefined}
+              const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+              const min = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate());
+              return d < min;
+            } : undefined}
             initialFocus
             classNames={{
               day: cn(
@@ -188,15 +225,20 @@ export function DateTimePicker({
           {/* Time picker */}
           <div className="flex items-center gap-3 px-4 py-3">
             <Clock className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
-            <span className="text-sm text-muted-foreground">Time</span>
+            <div className="flex flex-col">
+              <span className="text-sm text-muted-foreground">Time</span>
+              <span className="text-xs text-muted-foreground/60">24-hour format</span>
+            </div>
             <div className="flex items-center gap-1 ml-auto">
               <input
                 type="text"
                 inputMode="numeric"
                 value={hour}
                 onChange={handleHour}
-                onFocus={(e) => e.target.select()}
+                onBlur={handleHourBlur}
+                onFocus={(e) => { const t = e.target; setTimeout(() => t.select(), 0); }}
                 maxLength={2}
+                placeholder="HH"
                 aria-label="Hour"
                 className={cn(
                   'w-10 rounded-md border border-input bg-background px-2 py-1 text-center text-sm font-mono tabular-nums',
@@ -211,8 +253,10 @@ export function DateTimePicker({
                 inputMode="numeric"
                 value={minute}
                 onChange={handleMinute}
-                onFocus={(e) => e.target.select()}
+                onBlur={handleMinuteBlur}
+                onFocus={(e) => { const t = e.target; setTimeout(() => t.select(), 0); }}
                 maxLength={2}
+                placeholder="MM"
                 aria-label="Minute"
                 className={cn(
                   'w-10 rounded-md border border-input bg-background px-2 py-1 text-center text-sm font-mono tabular-nums',
