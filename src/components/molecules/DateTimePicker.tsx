@@ -68,7 +68,10 @@ export function DateTimePicker({
     if (!date) return;
     const d = new Date(date);
     d.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
-    onChange(d.toISOString().slice(0, 16)); // "YYYY-MM-DDTHH:mm"
+    // Format in local time to avoid UTC offset shifting the value
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const localISO = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    onChange(localISO);
   };
 
   /** Returns now + 5 minutes as { h, m } strings */
