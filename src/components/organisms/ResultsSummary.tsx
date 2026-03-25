@@ -28,6 +28,7 @@ interface PositionResult {
   totalVotes: number;
   candidates: CandidateResult[];
   winnerId: string;
+  isTie?: boolean;
 }
 
 interface ResultsSummaryProps {
@@ -113,11 +114,14 @@ export function ResultsSummary({
     );
   }
 
-  // Count winners
   const totalPositions = positions.length;
   const winners = positions.map((p) => {
     const winner = p.candidates.find((c) => c.id === p.winnerId);
-    return { position: p.position, winner };
+    const topVotes = p.candidates[0]?.votes ?? 0;
+    const tiedCandidates = p.isTie
+      ? p.candidates.filter((c) => c.votes === topVotes)
+      : [];
+    return { position: p.position, winner, isTie: p.isTie ?? false, tiedCandidates };
   });
 
   return (
@@ -189,24 +193,43 @@ export function ResultsSummary({
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2">
-            {winners.map(({ position, winner }) => (
+            {winners.map(({ position, winner, isTie, tiedCandidates }) => (
               <div
                 key={position}
-                className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
+                className={cn(
+                  'flex items-center gap-3 p-3 rounded-lg',
+                  isTie ? 'bg-amber-500/10 border border-amber-500/30' : 'bg-muted/50'
+                )}
               >
-                <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-muted border border-border">
-                  {winner?.photoUrl ? (
-                    <img src={winner.photoUrl} alt={winner.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-sm font-bold text-muted-foreground">
-                      {winner?.name.charAt(0).toUpperCase() ?? '?'}
+                {isTie ? (
+                  <>
+                    <div className="w-10 h-10 rounded-full shrink-0 bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
+                      <span className="text-xs font-bold text-amber-600 dark:text-amber-400">=</span>
                     </div>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground truncate">{position}</p>
-                  <p className="font-semibold text-sm truncate">{winner?.name || 'No winner'}</p>
-                </div>
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground truncate">{position}</p>
+                      <p className="font-semibold text-sm text-amber-600 dark:text-amber-400">
+                        TIE — {tiedCandidates.map((c) => c.name).join(' & ')}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-muted border border-border">
+                      {winner?.photoUrl ? (
+                        <img src={winner.photoUrl} alt={winner.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-sm font-bold text-muted-foreground">
+                          {winner?.name.charAt(0).toUpperCase() ?? '?'}
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground truncate">{position}</p>
+                      <p className="font-semibold text-sm truncate">{winner?.name || 'No winner'}</p>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -224,6 +247,7 @@ export function ResultsSummary({
               totalVotes={position.totalVotes}
               candidates={position.candidates}
               winnerId={position.winnerId}
+              isTie={position.isTie}
             />
           ))}
         </div>

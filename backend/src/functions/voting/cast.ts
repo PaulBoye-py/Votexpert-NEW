@@ -39,10 +39,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return conflict('This election is not currently accepting votes')
     }
 
-    // ── Validate the active position ────────────────────────────────────────
-    // The voter can only vote for the CURRENTLY active position.
-    // This prevents submitting votes for positions that have already passed
-    // or haven't opened yet.
+    // ── Fetch positions ──────────────────────────────────────────────────────
     const positionsResult = await db.send(
       new QueryCommand({
         TableName: Tables.POSITIONS,
@@ -52,15 +49,21 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       })
     )
     const positions = (positionsResult.Items ?? []) as Position[]
-    const activeState = election.started_at
-      ? getActivePosition(positions, election.started_at)
-      : null
 
-    if (!activeState) {
-      return conflict('No position is currently open for voting')
-    }
-    if (activeState.position.position_id !== body.position_id) {
-      return conflict('This position is not currently open for voting')
+    // ── Validate the active position (immediate elections only) ──────────────
+    // Scheduled elections have all positions open simultaneously during the window;
+    // immediate elections enforce sequential position timing.
+    const isScheduled = !!election.scheduled_end_at
+    if (!isScheduled) {
+      const activeState = election.started_at
+        ? getActivePosition(positions, election.started_at)
+        : null
+      if (!activeState) {
+        return conflict('No position is currently open for voting')
+      }
+      if (activeState.position.position_id !== body.position_id) {
+        return conflict('This position is not currently open for voting')
+      }
     }
 
     // ── Validate the candidate belongs to this position ──────────────────────
@@ -78,6 +81,9 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // ── Authenticate & check duplicate vote ─────────────────────────────────
+    // vote_weight: open election voters always count as 1; closed voters use their assigned weight
+    let voteWeight = 1
+
     if (election.type === ElectionType.OPEN) {
       // Open election: authenticate via session token
       const sessionToken = body.session_token ?? getSessionToken(event)
@@ -134,17 +140,29 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
 
       const now = new Date().toISOString()
-      const isLastPosition = positions[positions.length - 1].position_id === body.position_id
+      // For scheduled elections all positions open simultaneously — mark voted_at
+      // when the voter has now cast a vote for every position.
+      // For immediate elections the positions are sequential, so voted_at is set
+      // when the voter reaches the last one.
+      const allPositionIds = new Set(positions.map(p => p.position_id))
+      const castSoFar = new Set(Object.keys(voter.votes_cast))
+      castSoFar.add(body.position_id) // include the vote we're about to record
+      const allVoted = isScheduled
+        ? allPositionIds.size > 0 && [...allPositionIds].every(id => castSoFar.has(id))
+        : positions[positions.length - 1].position_id === body.position_id
 
       await db.send(
         new UpdateCommand({
           TableName: Tables.VOTERS,
           Key: { election_id: body.election_id, voter_id: voter.voter_id },
-          UpdateExpression: `SET votes_cast.#pid = :cid ${isLastPosition ? ', voted_at = :now' : ''}`,
+          UpdateExpression: `SET votes_cast.#pid = :cid ${allVoted ? ', voted_at = :now' : ''}`,
           ExpressionAttributeNames: { '#pid': body.position_id },
-          ExpressionAttributeValues: { ':cid': body.candidate_id, ...(isLastPosition ? { ':now': now } : {}) },
+          ExpressionAttributeValues: { ':cid': body.candidate_id, ...(allVoted ? { ':now': now } : {}) },
         })
       )
+
+      // Use the voter's weight (defaults to 1 for legacy records without the field)
+      voteWeight = voter.vote_weight ?? 1
     }
 
     // ── Write audit vote record ──────────────────────────────────────────────
@@ -163,11 +181,12 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
         Item: {
           ...voteRecord,
           vote_sk: `${body.position_id}#${body.candidate_id}#${voteRecord.vote_id}`,
+          vote_weight: voteWeight,
         },
       })
     )
 
-    // ── Atomically increment vote count ──────────────────────────────────────
+    // ── Atomically increment vote count (by voter's weight) ──────────────────
     const updatedCounts = await db.send(
       new UpdateCommand({
         TableName: Tables.VOTE_COUNTS,
@@ -175,9 +194,9 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
           election_id: body.election_id,
           position_candidate_sk: `${body.position_id}#${body.candidate_id}`,
         },
-        UpdateExpression: 'ADD vote_count :one SET candidate_id = :cid, position_id = :pid, election_id = :eid',
+        UpdateExpression: 'ADD vote_count :w SET candidate_id = :cid, position_id = :pid, election_id = :eid',
         ExpressionAttributeValues: {
-          ':one': 1,
+          ':w': voteWeight,
           ':cid': body.candidate_id,
           ':pid': body.position_id,
           ':eid': body.election_id,
@@ -186,7 +205,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       })
     )
 
-    const newCount = (updatedCounts.Attributes?.vote_count as number) ?? 1
+    const newCount = (updatedCounts.Attributes?.vote_count as number) ?? voteWeight
 
     // ── Broadcast updated count to WebSocket clients ──────────────────────────
     // Only broadcast for open elections (or closed elections with show_live_results=true)

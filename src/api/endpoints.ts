@@ -30,6 +30,10 @@ export const ENDPOINTS = {
   VOTERS_SEND_INVITES: (electionId: string) =>
     `/elections/${electionId}/voters/send-invites`,
 
+  // ─── Org Voter Pool ───────────────────────────────────────────────────────
+  ORG_VOTERS: '/org-voters',
+  ORG_VOTER: (id: string) => `/org-voters/${id}`,
+
   // ─── Voting (public) ──────────────────────────────────────────────────────
   VOTE_SESSION: '/vote/session',
   VOTE_VERIFY_TOKEN: '/vote/verify-token',

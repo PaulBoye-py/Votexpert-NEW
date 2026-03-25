@@ -20,6 +20,8 @@ export interface ElectionByCodeResponse {
   type: 'OPEN' | 'CLOSED';
   status: string;
   election_code: string;
+  scheduled_start_at?: string;
+  scheduled_end_at?: string;
 }
 
 export async function getElectionByCode(code: string): Promise<ElectionByCodeResponse> {

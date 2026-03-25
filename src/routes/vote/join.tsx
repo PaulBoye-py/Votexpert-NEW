@@ -19,7 +19,7 @@ import {
   type ElectionByCodeResponse,
 } from '@/api/services/voter.service';
 import { setVoterSession } from '@/stores/auth.store';
-import { Loader2, Vote, Users, ArrowRight, Hash } from 'lucide-react';
+import { Loader2, Vote, Users, ArrowRight, Hash, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VOTER_SESSION_KEY } from '@/lib/constants';
 
@@ -76,6 +76,10 @@ function VoteJoinPage() {
   const lookupMutation = useMutation({
     mutationFn: (code: string) => getElectionByCode(code),
     onSuccess: (data) => {
+      if (data.type === 'CLOSED') {
+        setError('This is a closed election. Please use your personal invite link sent to your email.');
+        return;
+      }
       setElectionInfo(data);
       setError(undefined);
       setStep('name');
@@ -90,12 +94,43 @@ function VoteJoinPage() {
     lookupMutation.mutate(code);
   };
 
-  // ── Join lobby ─────────────────────────────────────────────────────────────
+  // Is this a scheduled election (time window mode)?
+  const isScheduled = !!(electionInfo?.scheduled_end_at);
+
+  // ── Join / enter ────────────────────────────────────────────────────────────
   const joinMutation = useMutation({
     mutationFn: async () => {
       if (!electionInfo) throw new Error('No election selected');
       const eid = electionInfo.election_id;
 
+      if (isScheduled) {
+        // Scheduled elections: no lobby — either go to ballot (if ACTIVE) or show waiting screen
+        if (electionInfo.status === 'ACTIVE') {
+          const existing = (() => {
+            try { const s = localStorage.getItem(VOTER_SESSION_KEY); return s ? JSON.parse(s) : null; }
+            catch { return null; }
+          })();
+          const existingToken = existing?.election_id === eid ? existing.session_token : undefined;
+          const sessionData = await startVoteSession(eid, existingToken);
+          setVoterSession({
+            session_token: sessionData.session_token,
+            election_id: eid,
+            display_name: displayName.trim() || 'Anonymous',
+          });
+          navigate({ to: '/vote/$electionId/ballot', params: { electionId: eid } });
+        } else {
+          // SCHEDULED (not yet ACTIVE) — set session stub, navigate to lobby which polls
+          setVoterSession({
+            session_token: '',
+            election_id: eid,
+            display_name: displayName.trim() || 'Anonymous',
+          });
+          navigate({ to: '/vote/$electionId/lobby', params: { electionId: eid } });
+        }
+        return;
+      }
+
+      // Immediate election: join lobby as usual
       const lobby = await joinLobby(eid, displayName.trim() || undefined);
 
       if (electionInfo.status === 'ACTIVE') {
@@ -171,7 +206,7 @@ function VoteJoinPage() {
               </div>
               <CardTitle className="text-xl">Enter Election Code</CardTitle>
               <CardDescription>
-                Enter the 6-digit code shared by your host, or scan the QR code.
+                Enter the 6-digit code shared by your host.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -238,6 +273,24 @@ function VoteJoinPage() {
                 <StatusBadge status={electionInfo.status} />
               </div>
 
+              {isScheduled && electionInfo.scheduled_start_at && (
+                <div className="flex items-center gap-2 rounded-lg bg-blue-500/10 border border-blue-500/20 px-4 py-2.5">
+                  <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      {electionInfo.status === 'ACTIVE' ? 'Voting open until' : 'Voting opens at'}
+                    </p>
+                    <p className="text-sm font-medium">
+                      {new Date(
+                        electionInfo.status === 'ACTIVE' && electionInfo.scheduled_end_at
+                          ? electionInfo.scheduled_end_at
+                          : electionInfo.scheduled_start_at
+                      ).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Name input — open elections only */}
               {electionInfo.type === 'OPEN' && (
                 <div className="space-y-1.5">
@@ -267,7 +320,9 @@ function VoteJoinPage() {
                 >
                   {joinMutation.isPending
                     ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Joining…</>
-                    : <><Users className="mr-2 h-4 w-4" /> Join Lobby</>}
+                    : isScheduled && electionInfo.status === 'ACTIVE'
+                      ? <><ArrowRight className="mr-2 h-4 w-4" /> Vote Now</>
+                      : <><Users className="mr-2 h-4 w-4" /> {isScheduled ? 'Wait for Election' : 'Join Lobby'}</>}
                 </Button>
               )}
 

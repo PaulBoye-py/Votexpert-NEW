@@ -15,7 +15,7 @@ import { Card, CardContent } from '@/components/atoms';
 import { getLobbyState, startVoteSession } from '@/api/services/voter.service';
 import { $voterSession, setVoterSession } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
-import { Loader2, Vote, Users, CheckCircle } from 'lucide-react';
+import { Loader2, Vote, Users, CheckCircle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { LobbyParticipant } from '@/types';
 import { VOTER_SESSION_KEY } from '@/lib/constants';
@@ -73,6 +73,10 @@ function LobbyPage() {
     },
   });
 
+  // Is this a scheduled election? Detect by absence of participant_id in session
+  // (scheduled elections skip joinLobby so never get a participant_id)
+  const isScheduled = !session?.participant_id && !session?.invite_token;
+
   // Detect when election goes ACTIVE → auto-transition to ballot
   React.useEffect(() => {
     if (!data || starting) return;
@@ -82,7 +86,7 @@ function LobbyPage() {
         // Closed election — already have auth token
         navigate({ to: '/vote/$electionId/ballot', params: { electionId } });
       } else {
-        // Open election — create vote session now
+        // Open election (immediate or scheduled) — create vote session now
         sessionMutation.mutate();
       }
     }
@@ -131,6 +135,52 @@ function LobbyPage() {
   const participants: LobbyParticipant[] = data?.participants ?? [];
   const myParticipantId = session.participant_id;
   const electionTitle = data?.election_title ?? 'Election';
+
+  // Scheduled election waiting screen — no participant list, show start time
+  if (isScheduled) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="border-b border-border bg-card">
+          <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-2">
+            <Vote className="h-5 w-5 text-green-600 dark:text-green-400" />
+            <span className="font-semibold text-sm truncate">{electionTitle}</span>
+          </div>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center px-4 py-8">
+          <div className="w-full max-w-md space-y-6 text-center">
+            <div className="relative mx-auto w-24 h-24">
+              <div className="absolute inset-0 rounded-full bg-blue-500/10 animate-ping" />
+              <div className="relative w-24 h-24 rounded-full bg-blue-500/15 border-2 border-blue-500/30 flex items-center justify-center">
+                <Clock className="h-10 w-10 text-blue-600 dark:text-blue-400" />
+              </div>
+            </div>
+
+            <div>
+              <h1 className="text-2xl font-bold">Waiting for election to start</h1>
+              <p className="text-muted-foreground text-sm mt-1">
+                {data?.started_at
+                  ? 'The election is starting…'
+                  : 'This page will update automatically when voting opens.'}
+              </p>
+            </div>
+
+            <div className="flex justify-center gap-1.5">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="w-2 h-2 rounded-full bg-blue-500/60 animate-bounce"
+                  style={{ animationDelay: `${i * 0.15}s` }}
+                />
+              ))}
+            </div>
+
+            {error && <AlertMessage variant="error">{error}</AlertMessage>}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

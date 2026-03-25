@@ -29,6 +29,7 @@ interface PositionResultsCardProps {
   totalVotes: number;
   candidates: CandidateResult[];
   winnerId?: string;
+  isTie?: boolean;
   isLoading?: boolean;
   className?: string;
 }
@@ -55,15 +56,24 @@ export function PositionResultsCard({
   totalVotes,
   candidates,
   winnerId,
+  isTie = false,
   isLoading = false,
   className,
 }: PositionResultsCardProps) {
-  // Sort candidates by rank
   const sortedCandidates = [...candidates].sort((a, b) => a.rank - b.rank);
-  const winner = sortedCandidates.find((c) => c.id === winnerId) || sortedCandidates[0];
+  const winner = sortedCandidates.find((c) => c.id === winnerId);
+  const topVotes = sortedCandidates[0]?.votes ?? 0;
 
-  const getRankBadge = (rank: number) => {
-    if (rank === 1) {
+  const getRankBadge = (candidate: CandidateResult) => {
+    const isTiedCandidate = isTie && candidate.votes === topVotes;
+    if (isTiedCandidate) {
+      return (
+        <Badge className="flex items-center gap-1 bg-amber-500/15 text-amber-700 dark:text-amber-300 border-0">
+          TIE
+        </Badge>
+      );
+    }
+    if (candidate.id === winnerId) {
       return (
         <Badge variant="success" className="flex items-center gap-1">
           <Trophy className="h-3 w-3" />
@@ -71,7 +81,7 @@ export function PositionResultsCard({
         </Badge>
       );
     }
-    if (rank === 2) {
+    if (candidate.rank === 2) {
       return (
         <Badge variant="secondary" className="flex items-center gap-1">
           <Medal className="h-3 w-3" />
@@ -79,7 +89,7 @@ export function PositionResultsCard({
         </Badge>
       );
     }
-    if (rank === 3) {
+    if (candidate.rank === 3) {
       return (
         <Badge variant="secondary" className="flex items-center gap-1">
           <Medal className="h-3 w-3" />
@@ -100,11 +110,18 @@ export function PositionResultsCard({
               {totalVotes} total vote{totalVotes !== 1 ? 's' : ''} cast
             </CardDescription>
           </div>
-          {winner && !isLoading && (
-            <div className="text-right">
-              <p className="text-sm text-muted-foreground">Winner</p>
-              <p className="font-semibold text-foreground">{winner.name}</p>
-            </div>
+          {!isLoading && (
+            isTie ? (
+              <div className="text-right">
+                <p className="text-sm text-amber-600 dark:text-amber-400 font-semibold">TIE</p>
+                <p className="text-xs text-muted-foreground">No winner declared</p>
+              </div>
+            ) : winner ? (
+              <div className="text-right">
+                <p className="text-sm text-muted-foreground">Winner</p>
+                <p className="font-semibold text-foreground">{winner.name}</p>
+              </div>
+            ) : null
           )}
         </div>
       </CardHeader>
@@ -113,48 +130,49 @@ export function PositionResultsCard({
           <ResultsSkeleton />
         ) : (
           <div className="space-y-4">
-            {sortedCandidates.map((candidate) => (
-              <div
-                key={candidate.id}
-                className={cn(
-                  'flex items-center gap-4 p-3 rounded-lg transition-colors',
-                  candidate.id === winnerId && 'bg-primary/5 border border-primary/20'
-                )}
-              >
-                {/* Avatar */}
-                <Avatar className="h-12 w-12">
-                  {candidate.photoUrl && (
-                    <AvatarImage src={candidate.photoUrl} alt={candidate.name} />
+            {sortedCandidates.map((candidate) => {
+              const isTiedCandidate = isTie && candidate.votes === topVotes;
+              return (
+                <div
+                  key={candidate.id}
+                  className={cn(
+                    'flex items-center gap-4 p-3 rounded-lg transition-colors',
+                    isTiedCandidate && 'bg-amber-500/5 border border-amber-500/20',
+                    !isTie && candidate.id === winnerId && 'bg-primary/5 border border-primary/20'
                   )}
-                  <AvatarFallback>{getInitials(candidate.name)}</AvatarFallback>
-                </Avatar>
+                >
+                  <Avatar className="h-12 w-12">
+                    {candidate.photoUrl && (
+                      <AvatarImage src={candidate.photoUrl} alt={candidate.name} />
+                    )}
+                    <AvatarFallback>{getInitials(candidate.name)}</AvatarFallback>
+                  </Avatar>
 
-                {/* Info and progress */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="font-medium text-foreground truncate">
-                      {candidate.name}
-                    </p>
-                    {getRankBadge(candidate.rank)}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-medium text-foreground truncate">
+                        {candidate.name}
+                      </p>
+                      {getRankBadge(candidate)}
+                    </div>
+                    <ProgressBar
+                      value={candidate.percentage}
+                      variant={isTiedCandidate ? 'default' : candidate.id === winnerId ? 'success' : 'default'}
+                      size="sm"
+                    />
                   </div>
-                  <ProgressBar
-                    value={candidate.percentage}
-                    variant={candidate.id === winnerId ? 'success' : 'default'}
-                    size="sm"
-                  />
-                </div>
 
-                {/* Votes */}
-                <div className="text-right">
-                  <p className="text-lg font-bold text-foreground">
-                    {candidate.percentage.toFixed(1)}%
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {candidate.votes} vote{candidate.votes !== 1 ? 's' : ''}
-                  </p>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-foreground">
+                      {candidate.percentage.toFixed(1)}%
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {candidate.votes} vote{candidate.votes !== 1 ? 's' : ''}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </CardContent>

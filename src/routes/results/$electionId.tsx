@@ -40,6 +40,7 @@ function PublicResultsPage() {
         rank: idx + 1,
       })),
       winnerId: pos.winner?.candidate_id ?? '',
+      isTie: pos.is_tie ?? false,
     }));
   }, [data]);
 

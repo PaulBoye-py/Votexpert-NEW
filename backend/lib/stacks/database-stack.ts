@@ -14,6 +14,7 @@ export class DatabaseStack extends cdk.Stack {
   public readonly voteCountsTable: dynamodb.Table      // Fast read — atomic vote counters
   public readonly wsConnectionsTable: dynamodb.Table   // Active WebSocket connections
   public readonly lobbyParticipantsTable: dynamodb.Table // Pre-start waiting room participants
+  public readonly orgVotersTable: dynamodb.Table          // Org-level voter pool (reusable across elections)
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props)
@@ -195,6 +196,24 @@ export class DatabaseStack extends cdk.Stack {
       removalPolicy,
     })
 
+    // ─── Org Voter Pool ───────────────────────────────────────────────────────
+    // Org-level voter pool — voters that can be reused across multiple elections.
+    // When setting up a closed election, admin selects from this pool.
+    this.orgVotersTable = new dynamodb.Table(this, 'OrgVotersTable', {
+      tableName: 'votexpert-org-voters',
+      partitionKey: { name: 'org_id', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'org_voter_id', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy,
+    })
+
+    // GSI: check for duplicate email within org
+    this.orgVotersTable.addGlobalSecondaryIndex({
+      indexName: 'org-email-index',
+      partitionKey: { name: 'org_id', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'email', type: dynamodb.AttributeType.STRING },
+    })
+
     // ─── Outputs ─────────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'OrgsTableName', { value: this.orgsTable.tableName })
     new cdk.CfnOutput(this, 'ElectionsTableName', { value: this.electionsTable.tableName })
@@ -205,5 +224,6 @@ export class DatabaseStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'VotesTableName', { value: this.votesTable.tableName })
     new cdk.CfnOutput(this, 'VoteCountsTableName', { value: this.voteCountsTable.tableName })
     new cdk.CfnOutput(this, 'WSConnectionsTableName', { value: this.wsConnectionsTable.tableName })
+    new cdk.CfnOutput(this, 'OrgVotersTableName', { value: this.orgVotersTable.tableName })
   }
 }

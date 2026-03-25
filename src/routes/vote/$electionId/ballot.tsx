@@ -30,7 +30,10 @@ function BallotPage() {
   const session = useStore($voterSession);
 
   const [selectedCandidate, setSelectedCandidate] = React.useState<string | null>(null);
+  // For scheduled elections: track selected candidate per position
+  const [selectedCandidates, setSelectedCandidates] = React.useState<Record<string, string>>({});
   const [error, setError] = React.useState<string | undefined>();
+  const [positionErrors, setPositionErrors] = React.useState<Record<string, string>>({});
   const [votedPositions, setVotedPositions] = React.useState<Set<string>>(new Set());
 
   // Redirect if no session
@@ -50,6 +53,7 @@ function BallotPage() {
 
   const activePosition = data?.active_position;
   const election = data?.election;
+  const isScheduled = !!election?.scheduled_end_at;
 
   // Smooth local countdown seeded from server value on each poll
   const [countdown, setCountdown] = React.useState(0);
@@ -124,6 +128,53 @@ function BallotPage() {
     },
   });
 
+  // Mutation for scheduled elections (position + candidate passed directly)
+  const scheduledVoteMutation = useMutation({
+    mutationFn: ({ positionId, candidateId }: { positionId: string; candidateId: string }) =>
+      castVote({
+        election_id: electionId,
+        position_id: positionId,
+        candidate_id: candidateId,
+        ...(session?.invite_token
+          ? { invite_token: session.invite_token }
+          : { session_token: session?.session_token }),
+      }),
+    onSuccess: (voteResult) => {
+      setVotedPositions((prev) => new Set([...prev, voteResult.position_id]));
+      setSelectedCandidates((prev) => { const n = { ...prev }; delete n[voteResult.position_id]; return n; });
+      setPositionErrors((prev) => { const n = { ...prev }; delete n[voteResult.position_id]; return n; });
+      queryClient.setQueryData(
+        ['vote', 'election', electionId],
+        (old: PublicElectionResponse | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            positions: old.positions.map((pos) => {
+              if (pos.position_id !== voteResult.position_id) return pos;
+              return {
+                ...pos,
+                candidates: pos.candidates.map((c) =>
+                  c.candidate_id === voteResult.candidate_id
+                    ? { ...c, vote_count: voteResult.vote_count }
+                    : c
+                ),
+              };
+            }),
+          };
+        }
+      );
+      queryClient.invalidateQueries({ queryKey: ['vote', 'election', electionId] });
+    },
+    onError: (err: Error, vars) => {
+      if (err.message.toLowerCase().includes('already voted')) {
+        setVotedPositions((prev) => new Set([...prev, vars.positionId]));
+        queryClient.invalidateQueries({ queryKey: ['vote', 'election', electionId] });
+      } else {
+        setPositionErrors((prev) => ({ ...prev, [vars.positionId]: err.message }));
+      }
+    },
+  });
+
   if (!session) return null;
 
   if (isLoading) {
@@ -162,6 +213,140 @@ function BallotPage() {
       </div>
     );
   }
+
+  // ── Scheduled election: show all positions simultaneously ───────────────────
+  if (isScheduled) {
+    const allPositions = data?.positions ?? [];
+    const allVoted = allPositions.length > 0 && allPositions.every(p => votedPositions.has(p.position_id));
+    const endTime = election.scheduled_end_at ? new Date(election.scheduled_end_at) : null;
+
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="border-b border-border bg-card sticky top-0 z-10">
+          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              <Vote className="h-5 w-5 text-primary shrink-0" />
+              <span className="font-semibold text-sm truncate">{election.title}</span>
+            </div>
+            {endTime && (
+              <Badge variant="secondary" className="text-xs shrink-0">
+                Ends {endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        <div className="max-w-2xl mx-auto px-4 py-6 space-y-8">
+          {allVoted ? (
+            <Card>
+              <CardContent className="py-10 text-center space-y-3">
+                <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
+                <h2 className="text-xl font-bold">All votes submitted!</h2>
+                <p className="text-sm text-muted-foreground">
+                  Results will be available when the election ends.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Vote for each position below. All positions are open simultaneously.
+              </p>
+              {allPositions.map((pos) => {
+                const hasVoted = votedPositions.has(pos.position_id);
+                const selected = selectedCandidates[pos.position_id];
+                const posErr = positionErrors[pos.position_id];
+                const isPending = scheduledVoteMutation.isPending && scheduledVoteMutation.variables?.positionId === pos.position_id;
+
+                return (
+                  <Card key={pos.position_id} className={cn(hasVoted ? 'opacity-75' : '')}>
+                    <CardContent className="pt-5 pb-5 space-y-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <h2 className="font-semibold text-base">{pos.title}</h2>
+                        {hasVoted && (
+                          <Badge className="bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/30 shrink-0">
+                            <CheckCircle className="h-3 w-3 mr-1" /> Voted
+                          </Badge>
+                        )}
+                      </div>
+                      {pos.description && (
+                        <p className="text-sm text-muted-foreground">{pos.description}</p>
+                      )}
+                      {posErr && <AlertMessage variant="error">{posErr}</AlertMessage>}
+
+                      {hasVoted ? (
+                        <p className="text-sm text-muted-foreground italic">Your vote has been recorded.</p>
+                      ) : (
+                        <>
+                          <div className="grid gap-2">
+                            {pos.candidates.map((c) => (
+                              <button
+                                key={c.candidate_id}
+                                type="button"
+                                onClick={() => setSelectedCandidates((prev) => ({ ...prev, [pos.position_id]: c.candidate_id }))}
+                                className={cn(
+                                  'w-full rounded-lg border-2 p-3 text-left transition-all',
+                                  selected === c.candidate_id
+                                    ? 'border-primary bg-primary/5 shadow-sm'
+                                    : 'border-border hover:border-primary/50 bg-card'
+                                )}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={cn(
+                                    'w-9 h-9 rounded-full overflow-hidden shrink-0 border-2',
+                                    selected === c.candidate_id ? 'border-primary' : 'border-transparent'
+                                  )}>
+                                    {c.photo_url ? (
+                                      <img src={c.photo_url} alt={c.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <div className={cn(
+                                        'w-full h-full flex items-center justify-center text-xs font-bold',
+                                        selected === c.candidate_id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                                      )}>
+                                        {c.name.charAt(0).toUpperCase()}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-sm">{c.name}</p>
+                                    {c.bio && <p className="text-xs text-muted-foreground truncate">{c.bio}</p>}
+                                  </div>
+                                  {selected === c.candidate_id && (
+                                    <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+                                  )}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                          <Button
+                            className="w-full"
+                            disabled={!selected || isPending}
+                            onClick={() => {
+                              if (!selected) return;
+                              setPositionErrors((prev) => { const n = { ...prev }; delete n[pos.position_id]; return n; });
+                              scheduledVoteMutation.mutate({ positionId: pos.position_id, candidateId: selected });
+                            }}
+                          >
+                            {isPending ? (
+                              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting…</>
+                            ) : (
+                              <>Submit Vote <ChevronRight className="ml-2 h-4 w-4" /></>
+                            )}
+                          </Button>
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Immediate election: sequential position flow ─────────────────────────────
 
   // No active position — either between positions or all done
   if (!activePosition) {

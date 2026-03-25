@@ -9,9 +9,11 @@ import { FormField } from '@/components/molecules';
 import { createElection } from '@/api/services/admin.service';
 import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
-import { ArrowLeft, CheckCircle, Globe, Lock, Trophy, Timer } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Globe, Lock, Trophy, Timer, Zap, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Admin, ElectionType, LeaderboardMode } from '@/types';
+
+type ElectionMode = 'immediate' | 'scheduled';
 
 export const adminElectionsCreateRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -28,6 +30,9 @@ function CreateElectionPage() {
     title: '',
     description: '',
     type: 'OPEN' as ElectionType,
+    mode: 'immediate' as ElectionMode,
+    scheduled_start_at: '',
+    scheduled_end_at: '',
     show_live_results: true,
     leaderboard_mode: 'at_end' as LeaderboardMode,
   });
@@ -47,6 +52,12 @@ function CreateElectionPage() {
         type: form.type,
         show_live_results: form.show_live_results,
         leaderboard_mode: form.leaderboard_mode,
+        ...(form.mode === 'scheduled' && form.scheduled_start_at
+          ? { scheduled_start_at: new Date(form.scheduled_start_at).toISOString() }
+          : {}),
+        ...(form.mode === 'scheduled' && form.scheduled_end_at
+          ? { scheduled_end_at: new Date(form.scheduled_end_at).toISOString() }
+          : {}),
       }),
     onSuccess: (election) => setCreatedId(election.election_id),
     onError: (err: Error) => setApiError(err.message),
@@ -55,6 +66,14 @@ function CreateElectionPage() {
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.title.trim()) e.title = 'Election title is required';
+    if (form.mode === 'scheduled') {
+      if (!form.scheduled_start_at) e.scheduled_start_at = 'Start time is required';
+      if (!form.scheduled_end_at) e.scheduled_end_at = 'End time is required';
+      if (form.scheduled_start_at && form.scheduled_end_at &&
+          new Date(form.scheduled_end_at) <= new Date(form.scheduled_start_at)) {
+        e.scheduled_end_at = 'End time must be after start time';
+      }
+    }
     setErrors(e);
     return !Object.keys(e).length;
   };
@@ -200,6 +219,75 @@ function CreateElectionPage() {
                 </div>
               </div>
 
+              {/* Election Mode */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Election Mode</label>
+                <div className="grid grid-cols-2 gap-4">
+                  {([
+                    { value: 'immediate' as const, label: 'Immediate', icon: Zap, desc: 'Start manually when you\'re ready. Positions run sequentially with timers.' },
+                    { value: 'scheduled' as const, label: 'Scheduled', icon: Calendar, desc: 'Set a time window. All positions open simultaneously for the duration.' },
+                  ]).map(({ value, label, icon: Icon, desc }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setForm((p) => ({ ...p, mode: value }))}
+                      className={cn(
+                        'rounded-lg border-2 p-4 text-left transition-all',
+                        form.mode === value
+                          ? 'border-green-500 bg-green-500/10'
+                          : 'border-border hover:border-green-500/50'
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon className={cn('h-4 w-4', form.mode === value ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground')} />
+                        <span className="font-medium text-sm">{label}</span>
+                        {form.mode === value && (
+                          <Badge className="ml-auto text-xs bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/30">Selected</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{desc}</p>
+                    </button>
+                  ))}
+                </div>
+
+                {form.mode === 'scheduled' && (
+                  <div className="grid grid-cols-2 gap-4 pt-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">Start Date & Time</label>
+                      <input
+                        type="datetime-local"
+                        title="Start date and time"
+                        value={form.scheduled_start_at}
+                        onChange={(e) => setForm((p) => ({ ...p, scheduled_start_at: e.target.value }))}
+                        className={cn(
+                          'flex w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                          errors.scheduled_start_at ? 'border-destructive' : 'border-input'
+                        )}
+                      />
+                      {errors.scheduled_start_at && (
+                        <p className="text-xs text-destructive">{errors.scheduled_start_at}</p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">End Date & Time</label>
+                      <input
+                        type="datetime-local"
+                        title="End date and time"
+                        value={form.scheduled_end_at}
+                        onChange={(e) => setForm((p) => ({ ...p, scheduled_end_at: e.target.value }))}
+                        className={cn(
+                          'flex w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                          errors.scheduled_end_at ? 'border-destructive' : 'border-input'
+                        )}
+                      />
+                      {errors.scheduled_end_at && (
+                        <p className="text-xs text-destructive">{errors.scheduled_end_at}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Leaderboard Mode */}
               <div className="space-y-3">
                 <label className="text-sm font-medium">Leaderboard Display</label>
@@ -253,7 +341,7 @@ function CreateElectionPage() {
                 <button
                   type="button"
                   role="switch"
-                  aria-checked={form.show_live_results ? 'true' : 'false'}
+                  aria-checked={form.show_live_results}
                   aria-label="Toggle live results"
                   title="Toggle live results"
                   onClick={() => setForm((p) => ({ ...p, show_live_results: !p.show_live_results }))}

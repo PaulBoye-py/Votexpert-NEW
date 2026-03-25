@@ -9,6 +9,7 @@ import type {
   Candidate,
   CreateCandidatePayload,
   Voter,
+  OrgVoter,
 } from '@/types';
 
 // ─── Org ──────────────────────────────────────────────────────────────────────
@@ -186,11 +187,37 @@ export async function sendInvites(
   return res.data;
 }
 
+export async function updateVoterWeight(
+  electionId: string,
+  voterId: string,
+  voteWeight: number
+): Promise<void> {
+  await apiClient.patch(ENDPOINTS.VOTER(electionId, voterId), { vote_weight: voteWeight });
+}
+
 export async function deleteVoter(
   electionId: string,
   voterId: string
 ): Promise<void> {
   await apiClient.delete(ENDPOINTS.VOTER(electionId, voterId));
+}
+
+// ─── Org Voter Pool ───────────────────────────────────────────────────────────
+
+export async function getOrgVoters(): Promise<OrgVoter[]> {
+  const res = await apiClient.get<OrgVoter[]>(ENDPOINTS.ORG_VOTERS);
+  return res.data;
+}
+
+export async function addOrgVoters(
+  emails: string[]
+): Promise<{ added: number; skipped: number; skipped_emails: string[] }> {
+  const res = await apiClient.post(ENDPOINTS.ORG_VOTERS, { emails });
+  return res.data;
+}
+
+export async function deleteOrgVoter(orgVoterId: string): Promise<void> {
+  await apiClient.delete(ENDPOINTS.ORG_VOTER(orgVoterId));
 }
 
 // ─── Uploads ──────────────────────────────────────────────────────────────────

@@ -34,7 +34,10 @@ export interface Election {
   status: ElectionStatus
 
   // Scheduling — either admin sets a scheduled start or starts manually
+  // If both scheduled_start_at and scheduled_end_at are set → "scheduled" mode
+  // (all positions open simultaneously during the window, no presenter flow)
   scheduled_start_at?: string  // ISO 8601, optional
+  scheduled_end_at?: string    // ISO 8601, optional — when the election auto-closes
   started_at?: string          // set when election actually starts
   ended_at?: string            // set when election actually ends
 
@@ -116,6 +119,8 @@ export interface Voter {
   voted_at?: string          // ISO 8601 — when they cast their vote (null = not voted)
   // Map of position_id → candidate_id for each vote cast
   votes_cast: Record<string, string>
+  // Vote weight — default 1 for regular voters, >1 for judges. Multiplied into vote count.
+  vote_weight: number
   created_at: string
 }
 
@@ -130,6 +135,17 @@ export interface Vote {
   candidate_id: string
   // Anonymized voter reference — session_token for open, voter_id for closed
   voter_ref: string
+  created_at: string
+}
+
+// ─── Org Voter Pool ───────────────────────────────────────────────────────────
+
+// Org-level voter records that can be reused across multiple closed elections.
+export interface OrgVoter {
+  org_voter_id: string
+  org_id: string
+  email: string
+  name?: string
   created_at: string
 }
 
@@ -170,6 +186,7 @@ export interface CreateElectionInput {
   description?: string
   type: ElectionType
   scheduled_start_at?: string
+  scheduled_end_at?: string
   show_live_results?: boolean
   leaderboard_mode?: 'after_each_position' | 'at_end'
 }

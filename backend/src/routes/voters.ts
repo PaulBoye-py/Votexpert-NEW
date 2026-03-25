@@ -61,6 +61,7 @@ votersRouter.post('/', async (req: Request, res: Response) => {
         invite_token: uuid(),
         token_expires_at: tokenExpiresAt,
         votes_cast: {},
+        vote_weight: 1,
         created_at: now,
       }
       await db.send(new PutCommand({ TableName: Tables.VOTERS, Item: voter }))
@@ -110,7 +111,7 @@ votersRouter.post('/import', async (req: Request, res: Response) => {
       if (existingEmails.has(email)) { skipped++; continue }
       const voter: Voter = {
         voter_id: uuid(), election_id: req.params.electionId, email,
-        invite_token: uuid(), token_expires_at: tokenExpiresAt, votes_cast: {}, created_at: now,
+        invite_token: uuid(), token_expires_at: tokenExpiresAt, votes_cast: {}, vote_weight: 1, created_at: now,
       }
       await db.send(new PutCommand({ TableName: Tables.VOTERS, Item: voter }))
       added++
@@ -165,6 +166,29 @@ votersRouter.post('/send-invites', async (req: Request, res: Response) => {
       } catch (e) { console.error(`Failed to send to ${voter.email}:`, e); failed++ }
     }
     send.ok(res, { sent, failed, total: voters.length })
+  } catch (err) { send.serverError(res, err) }
+})
+
+// PATCH /elections/:electionId/voters/:voterId  — { vote_weight: number }
+// Set a voter's weight (1 = regular, 2+ = judge with multiplied vote power)
+votersRouter.patch('/:voterId', async (req: Request, res: Response) => {
+  try {
+    const election = await assertOwnership(req, res)
+    if (!election) return
+    if (election.status === 'ACTIVE') return send.conflict(res, 'Cannot update voters during an active election')
+
+    const weight = Number(req.body?.vote_weight)
+    if (!Number.isInteger(weight) || weight < 1 || weight > 10) {
+      return send.badRequest(res, 'vote_weight must be an integer between 1 and 10')
+    }
+
+    await db.send(new UpdateCommand({
+      TableName: Tables.VOTERS,
+      Key: { election_id: req.params.electionId, voter_id: req.params.voterId },
+      UpdateExpression: 'SET vote_weight = :w',
+      ExpressionAttributeValues: { ':w': weight },
+    }))
+    send.ok(res, { voter_id: req.params.voterId, vote_weight: weight })
   } catch (err) { send.serverError(res, err) }
 })
 

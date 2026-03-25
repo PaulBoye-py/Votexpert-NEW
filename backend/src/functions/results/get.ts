@@ -87,11 +87,15 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
         percentage: positionTotalVotes > 0 ? Math.round((c.vote_count / positionTotalVotes) * 1000) / 10 : 0,
       }))
 
+      const topVotes = candidatesWithPct[0]?.vote_count ?? 0
+      const isTie = topVotes > 0 && candidatesWithPct.filter((c) => c.vote_count === topVotes).length > 1
+
       return {
         position: pos,
         candidates: candidatesWithPct,
         total_votes: positionTotalVotes,
-        winner: candidatesWithPct[0]?.vote_count > 0 ? candidatesWithPct[0] : undefined,
+        winner: isTie || topVotes === 0 ? undefined : candidatesWithPct[0],
+        is_tie: isTie,
       }
     })
 
