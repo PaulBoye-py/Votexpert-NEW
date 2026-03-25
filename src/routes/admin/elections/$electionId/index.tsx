@@ -584,7 +584,7 @@ function AdminElectionDetailsPage() {
                           <div>
                             <span className="font-medium text-sm">{pos.title}</span>
                             <span className="ml-2 text-xs text-muted-foreground">
-                              {pos.duration_seconds}s · {candidates.length} candidate{candidates.length !== 1 ? 's' : ''}
+                              {!isScheduledMode && `${pos.duration_seconds}s · `}{candidates.length} candidate{candidates.length !== 1 ? 's' : ''}
                             </span>
                           </div>
                           <div className="flex gap-2">

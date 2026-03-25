@@ -3,9 +3,8 @@ import { createRoute, useNavigate } from '@tanstack/react-router';
 import { useMutation } from '@tanstack/react-query';
 import { rootRoute } from '../../__root';
 import { AdminLayout } from '@/components/templates';
-import { AlertMessage } from '@/components/molecules';
+import { AlertMessage, FormField, DateTimePicker } from '@/components/molecules';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Badge } from '@/components/atoms';
-import { FormField } from '@/components/molecules';
 import { createElection } from '@/api/services/admin.service';
 import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
@@ -251,39 +250,23 @@ function CreateElectionPage() {
                 </div>
 
                 {form.mode === 'scheduled' && (
-                  <div className="grid grid-cols-2 gap-4 pt-2">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">Start Date & Time</label>
-                      <input
-                        type="datetime-local"
-                        title="Start date and time"
-                        value={form.scheduled_start_at}
-                        onChange={(e) => setForm((p) => ({ ...p, scheduled_start_at: e.target.value }))}
-                        className={cn(
-                          'flex w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                          errors.scheduled_start_at ? 'border-destructive' : 'border-input'
-                        )}
-                      />
-                      {errors.scheduled_start_at && (
-                        <p className="text-xs text-destructive">{errors.scheduled_start_at}</p>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">End Date & Time</label>
-                      <input
-                        type="datetime-local"
-                        title="End date and time"
-                        value={form.scheduled_end_at}
-                        onChange={(e) => setForm((p) => ({ ...p, scheduled_end_at: e.target.value }))}
-                        className={cn(
-                          'flex w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                          errors.scheduled_end_at ? 'border-destructive' : 'border-input'
-                        )}
-                      />
-                      {errors.scheduled_end_at && (
-                        <p className="text-xs text-destructive">{errors.scheduled_end_at}</p>
-                      )}
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    <DateTimePicker
+                      label="Start Date & Time"
+                      placeholder="When does voting open?"
+                      value={form.scheduled_start_at}
+                      onChange={(iso) => setForm((p) => ({ ...p, scheduled_start_at: iso }))}
+                      minDate={new Date()}
+                      error={errors.scheduled_start_at}
+                    />
+                    <DateTimePicker
+                      label="End Date & Time"
+                      placeholder="When does voting close?"
+                      value={form.scheduled_end_at}
+                      onChange={(iso) => setForm((p) => ({ ...p, scheduled_end_at: iso }))}
+                      minDate={form.scheduled_start_at ? new Date(form.scheduled_start_at) : new Date()}
+                      error={errors.scheduled_end_at}
+                    />
                   </div>
                 )}
               </div>

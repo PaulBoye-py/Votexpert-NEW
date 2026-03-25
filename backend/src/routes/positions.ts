@@ -34,7 +34,11 @@ positionsRouter.post('/', async (req: Request, res: Response) => {
 
     const body: CreatePositionInput = req.body
     if (!body?.title) return send.badRequest(res, 'title is required')
-    if (!body.duration_seconds || body.duration_seconds < 10) return send.badRequest(res, 'duration_seconds must be at least 10')
+    // Scheduled elections (have scheduled_end_at) don't use per-position timers
+    const isScheduled = !!election.scheduled_end_at
+    if (!isScheduled && (!body.duration_seconds || body.duration_seconds < 10)) {
+      return send.badRequest(res, 'duration_seconds must be at least 10')
+    }
 
     // Auto-assign order if not provided
     let order = body.position_order

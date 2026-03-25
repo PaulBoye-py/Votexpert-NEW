@@ -28,6 +28,9 @@ export {
   TableCaption,
 } from '@/components/ui/table';
 
+export { Calendar } from '@/components/ui/calendar';
+export { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+
 // Custom atoms
 export { Logo } from './Logo';
 export { Separator } from './Separator';
