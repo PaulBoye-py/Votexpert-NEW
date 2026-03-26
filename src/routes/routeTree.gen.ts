@@ -22,6 +22,7 @@ import { voteJoinRoute } from './vote/join';
 import { voteElectionRedirectRoute } from './vote/$electionId/index';
 import { voteBallotRoute } from './vote/$electionId/ballot';
 import { voteLobbyRoute } from './vote/$electionId/lobby';
+import { voteWaitingRoute } from './vote/$electionId/waiting';
 import { publicResultsRoute } from './results/$electionId';
 
 // Build the route tree
@@ -49,5 +50,6 @@ export const routeTree = rootRoute.addChildren([
   voteElectionRedirectRoute,
   voteLobbyRoute,
   voteBallotRoute,
+  voteWaitingRoute,
   publicResultsRoute,
 ]);

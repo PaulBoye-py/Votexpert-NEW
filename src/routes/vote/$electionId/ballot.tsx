@@ -33,6 +33,10 @@ function BallotPage() {
   const [error, setError] = React.useState<string | undefined>();
   const [positionErrors, setPositionErrors] = React.useState<Record<string, string>>({});
   const [votedPositions, setVotedPositions] = React.useState<Set<string>>(new Set());
+  // Scheduled: track selected candidate per position before confirming
+  const [selectedCandidates, setSelectedCandidates] = React.useState<Record<string, string>>({});
+  // Scheduled: track which candidate was actually voted for (for collapsed display)
+  const [votedCandidates, setVotedCandidates] = React.useState<Record<string, string>>({});
 
   // Redirect if no session
   React.useEffect(() => {
@@ -137,8 +141,9 @@ function BallotPage() {
           ? { invite_token: session.invite_token }
           : { session_token: session?.session_token }),
       }),
-    onSuccess: (voteResult) => {
+    onSuccess: (voteResult, vars) => {
       setVotedPositions((prev) => new Set([...prev, voteResult.position_id]));
+      setVotedCandidates((prev) => ({ ...prev, [vars.positionId]: vars.candidateId }));
       setPositionErrors((prev) => { const n = { ...prev }; delete n[voteResult.position_id]; return n; });
       queryClient.setQueryData(
         ['vote', 'election', electionId],
@@ -211,116 +216,196 @@ function BallotPage() {
     );
   }
 
-  // ── Scheduled election: show all positions simultaneously ───────────────────
+  // ── Scheduled election ballot ────────────────────────────────────────────────
   if (isScheduled) {
     const allPositions = data?.positions ?? [];
-    const allVoted = allPositions.length > 0 && allPositions.every(p => votedPositions.has(p.position_id));
-    const endTime = election.scheduled_end_at ? new Date(election.scheduled_end_at) : null;
+    const votedCount = allPositions.filter(p => votedPositions.has(p.position_id)).length;
+    const allVoted = allPositions.length > 0 && votedCount === allPositions.length;
+    const endTime = election.scheduled_end_at
+      ? new Date(election.scheduled_end_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+      : null;
+    const progressPct = allPositions.length > 0 ? Math.round((votedCount / allPositions.length) * 100) : 0;
 
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="border-b border-border bg-card sticky top-0 z-10">
-          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 min-w-0">
-              <Vote className="h-5 w-5 text-primary shrink-0" />
+    // All done screen
+    if (allVoted) {
+      return (
+        <div className="min-h-screen bg-background flex flex-col">
+          <div className="border-b border-border bg-card">
+            <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-2">
+              <Vote className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
               <span className="font-semibold text-sm truncate">{election.title}</span>
             </div>
-            {endTime && (
-              <Badge variant="secondary" className="text-xs shrink-0">
-                Ends {endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </Badge>
-            )}
+          </div>
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div className="text-center space-y-4 max-w-sm">
+              <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
+                <CheckCircle className="h-10 w-10 text-green-600 dark:text-green-400" />
+              </div>
+              <h1 className="text-2xl font-bold">All votes submitted!</h1>
+              <p className="text-sm text-muted-foreground">
+                Your votes have been recorded. Thank you for participating.
+              </p>
+              {endTime && (
+                <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-4 py-2">
+                  Results available after voting closes · {endTime}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-background pb-8">
+        {/* Sticky header with progress */}
+        <div className="border-b border-border bg-card sticky top-0 z-10">
+          <div className="max-w-2xl mx-auto px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <Vote className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+                <span className="font-semibold text-sm truncate">{election.title}</span>
+              </div>
+              {endTime && (
+                <span className="text-xs text-muted-foreground shrink-0">Closes {endTime}</span>
+              )}
+            </div>
+            {/* Progress bar */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                {/* eslint-disable-next-line react/forbid-component-props */}
+                <div
+                  className="h-full bg-green-500 rounded-full transition-all duration-500 w-(--prog)"
+                  style={{ '--prog': `${progressPct}%` } as React.CSSProperties}
+                />
+              </div>
+              <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                {votedCount}/{allPositions.length}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="max-w-2xl mx-auto px-4 py-6 space-y-8">
-          {allVoted ? (
-            <Card>
-              <CardContent className="py-10 text-center space-y-3">
-                <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
-                <h2 className="text-xl font-bold">All votes submitted!</h2>
-                <p className="text-sm text-muted-foreground">
-                  Results will be available when the election ends.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              <p className="text-sm text-muted-foreground">
-                Vote for each position below. All positions are open simultaneously.
-              </p>
-              {allPositions.map((pos) => {
-                const hasVoted = votedPositions.has(pos.position_id);
-                const posErr = positionErrors[pos.position_id];
-                const isPending = scheduledVoteMutation.isPending && scheduledVoteMutation.variables?.positionId === pos.position_id;
+        <div className="max-w-2xl mx-auto px-4 pt-6 space-y-4">
+          {allPositions.map((pos) => {
+            const hasVoted   = votedPositions.has(pos.position_id);
+            const selected   = selectedCandidates[pos.position_id];
+            const posErr     = positionErrors[pos.position_id];
+            const isPending  = scheduledVoteMutation.isPending &&
+                               scheduledVoteMutation.variables?.positionId === pos.position_id;
+            const votedForId = votedCandidates[pos.position_id];
+            const votedFor   = pos.candidates.find(c => c.candidate_id === votedForId);
 
-                return (
-                  <Card key={pos.position_id} className={cn(hasVoted ? 'opacity-75' : '')}>
-                    <CardContent className="pt-5 pb-5 space-y-4">
-                      <div className="flex items-center justify-between gap-2">
-                        <h2 className="font-semibold text-base">{pos.title}</h2>
-                        {hasVoted && (
-                          <Badge className="bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/30 shrink-0">
-                            <CheckCircle className="h-3 w-3 mr-1" /> Voted
-                          </Badge>
-                        )}
-                      </div>
-                      {pos.description && (
-                        <p className="text-sm text-muted-foreground">{pos.description}</p>
-                      )}
-                      {posErr && <AlertMessage variant="error">{posErr}</AlertMessage>}
+            // Collapsed "voted" row
+            if (hasVoted) {
+              return (
+                <div
+                  key={pos.position_id}
+                  className="flex items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/5 px-4 py-3"
+                >
+                  <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate">{pos.title}</p>
+                    {votedFor && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        Voted · {votedFor.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            }
 
-                      {hasVoted ? (
-                        <p className="text-sm text-muted-foreground italic">Your vote has been recorded.</p>
-                      ) : (
-                        <>
-                          <p className="text-xs text-muted-foreground">Tap a candidate to vote instantly.</p>
-                          <div className="grid gap-2">
-                            {pos.candidates.map((c) => {
-                              const isSubmitting = isPending && scheduledVoteMutation.variables?.candidateId === c.candidate_id;
-                              return (
-                                <button
-                                  key={c.candidate_id}
-                                  type="button"
-                                  disabled={isPending}
-                                  onClick={() => {
-                                    setPositionErrors((prev) => { const n = { ...prev }; delete n[pos.position_id]; return n; });
-                                    scheduledVoteMutation.mutate({ positionId: pos.position_id, candidateId: c.candidate_id });
-                                  }}
-                                  className={cn(
-                                    'w-full rounded-lg border-2 p-3 text-left transition-all',
-                                    isPending ? 'opacity-60 cursor-not-allowed' : 'hover:border-primary/50 hover:bg-primary/5',
-                                    'border-border bg-card'
-                                  )}
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 border-2 border-transparent">
-                                      {c.photo_url ? (
-                                        <img src={c.photo_url} alt={c.name} className="w-full h-full object-cover" />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-xs font-bold bg-muted text-muted-foreground">
-                                          {c.name.charAt(0).toUpperCase()}
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="font-medium text-sm">{c.name}</p>
-                                      {c.bio && <p className="text-xs text-muted-foreground truncate">{c.bio}</p>}
-                                    </div>
-                                    {isSubmitting && <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />}
-                                  </div>
-                                </button>
-                              );
-                            })}
+            // Open position card — select then confirm
+            return (
+              <Card key={pos.position_id}>
+                <CardContent className="pt-5 pb-5 space-y-4">
+                  <div>
+                    <h2 className="font-semibold text-base">{pos.title}</h2>
+                    {pos.description && (
+                      <p className="text-sm text-muted-foreground mt-0.5">{pos.description}</p>
+                    )}
+                  </div>
+
+                  {posErr && <AlertMessage variant="error">{posErr}</AlertMessage>}
+
+                  {/* Candidate selection */}
+                  <div className="grid gap-2">
+                    {pos.candidates.map((c) => {
+                      const isSelected = selected === c.candidate_id;
+                      return (
+                        <button
+                          key={c.candidate_id}
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => setSelectedCandidates(prev => ({
+                            ...prev,
+                            [pos.position_id]: c.candidate_id,
+                          }))}
+                          className={cn(
+                            'w-full rounded-lg border-2 p-3 text-left transition-all',
+                            isSelected
+                              ? 'border-green-500 bg-green-500/5'
+                              : 'border-border bg-card hover:border-green-500/40',
+                            isPending && 'opacity-60 cursor-not-allowed'
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            {/* Radio indicator */}
+                            <div className={cn(
+                              'w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors',
+                              isSelected ? 'border-green-500 bg-green-500' : 'border-muted-foreground/40'
+                            )}>
+                              {isSelected && (
+                                <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                              )}
+                            </div>
+                            {/* Photo */}
+                            <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 border border-border">
+                              {c.photo_url ? (
+                                <img src={c.photo_url} alt={c.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className={cn(
+                                  'w-full h-full flex items-center justify-center text-xs font-bold',
+                                  isSelected ? 'bg-green-500/20 text-green-700 dark:text-green-300' : 'bg-muted text-muted-foreground'
+                                )}>
+                                  {c.name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm">{c.name}</p>
+                              {c.bio && (
+                                <p className="text-xs text-muted-foreground truncate">{c.bio}</p>
+                              )}
+                            </div>
                           </div>
-                        </>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Confirm button — only appears after selection */}
+                  {selected && (
+                    <Button
+                      className="w-full bg-green-600 hover:bg-green-700 text-white"
+                      disabled={isPending}
+                      onClick={() => {
+                        setPositionErrors(prev => { const n = { ...prev }; delete n[pos.position_id]; return n; });
+                        scheduledVoteMutation.mutate({ positionId: pos.position_id, candidateId: selected });
+                      }}
+                    >
+                      {isPending ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting…</>
+                      ) : (
+                        <><CheckCircle className="mr-2 h-4 w-4" /> Cast Vote for {pos.title}</>
                       )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </>
-          )}
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
     );

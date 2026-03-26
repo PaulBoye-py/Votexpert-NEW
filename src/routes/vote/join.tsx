@@ -120,13 +120,13 @@ function VoteJoinPage() {
           });
           navigate({ to: '/vote/$electionId/ballot', params: { electionId: eid } });
         } else {
-          // SCHEDULED (not yet ACTIVE) — set session stub, navigate to lobby which polls
+          // SCHEDULED (not yet ACTIVE) — go to dedicated waiting/countdown page
           setVoterSession({
             session_token: '',
             election_id: eid,
             display_name: displayName.trim() || 'Anonymous',
           });
-          navigate({ to: '/vote/$electionId/lobby', params: { electionId: eid } });
+          navigate({ to: '/vote/$electionId/waiting', params: { electionId: eid } });
         }
         return;
       }
