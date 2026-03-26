@@ -96,6 +96,7 @@ publicRouter.get('/elections/:electionId', async (req: Request, res: Response) =
         type: election.type, status: election.status, started_at: election.started_at,
         show_live_results: election.show_live_results,
         leaderboard_mode: election.leaderboard_mode ?? 'at_end',
+        scheduled_start_at: election.scheduled_start_at,
         scheduled_end_at: election.scheduled_end_at,
       },
       positions: positions.map(pos => ({
@@ -152,6 +153,8 @@ publicRouter.get('/elections/:electionId/lobby', async (req: Request, res: Respo
       election_title: election.title,
       election_type: election.type,
       started_at: election.started_at ?? null,
+      scheduled_start_at: election.scheduled_start_at ?? null,
+      scheduled_end_at: election.scheduled_end_at ?? null,
       participants: participants
         .sort((a, b) => a.joined_at.localeCompare(b.joined_at))
         .map(p => ({ participant_id: p.participant_id, display_name: p.display_name, joined_at: p.joined_at })),

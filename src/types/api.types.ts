@@ -189,6 +189,7 @@ export interface PublicElectionResponse {
     type: ElectionType;
     status: ElectionStatus;
     started_at?: string;
+    scheduled_start_at?: string;
     scheduled_end_at?: string;
     show_live_results: boolean;
     leaderboard_mode: LeaderboardMode;
@@ -215,6 +216,8 @@ export interface LobbyStateResponse {
   election_title: string;
   election_type: ElectionType;
   started_at: string | null;
+  scheduled_start_at: string | null;
+  scheduled_end_at: string | null;
   participants: LobbyParticipant[];
 }
 

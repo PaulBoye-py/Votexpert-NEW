@@ -136,8 +136,10 @@ function LobbyPage() {
   const myParticipantId = session.participant_id;
   const electionTitle = data?.election_title ?? 'Election';
 
-  // Scheduled election waiting screen — no participant list, show start time
+  // Scheduled election waiting screen — no participant list, show start/end times
   if (isScheduled) {
+    const schedStart = data?.scheduled_start_at;
+    const schedEnd = data?.scheduled_end_at;
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <div className="border-b border-border bg-card">
@@ -157,22 +159,36 @@ function LobbyPage() {
             </div>
 
             <div>
-              <h1 className="text-2xl font-bold">Waiting for election to start</h1>
+              <h1 className="text-2xl font-bold">Voting hasn't started yet</h1>
               <p className="text-muted-foreground text-sm mt-1">
-                {data?.started_at
-                  ? 'The election is starting…'
-                  : 'This page will update automatically when voting opens.'}
+                This page will refresh automatically when voting opens.
               </p>
             </div>
 
+            {(schedStart || schedEnd) && (
+              <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-5 py-4 text-left space-y-2.5">
+                <p className="text-xs font-medium text-blue-700 dark:text-blue-300 uppercase tracking-wide flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" /> Voting window
+                </p>
+                {schedStart && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Opens</span>
+                    <span className="font-semibold">{new Date(schedStart).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                  </div>
+                )}
+                {schedEnd && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Closes</span>
+                    <span className="font-semibold">{new Date(schedEnd).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-center gap-1.5">
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="w-2 h-2 rounded-full bg-blue-500/60 animate-bounce"
-                  style={{ animationDelay: `${i * 0.15}s` }}
-                />
-              ))}
+              <div className="w-2 h-2 rounded-full bg-blue-500/60 animate-bounce [animation-delay:0ms]" />
+              <div className="w-2 h-2 rounded-full bg-blue-500/60 animate-bounce [animation-delay:150ms]" />
+              <div className="w-2 h-2 rounded-full bg-blue-500/60 animate-bounce [animation-delay:300ms]" />
             </div>
 
             {error && <AlertMessage variant="error">{error}</AlertMessage>}
@@ -219,13 +235,9 @@ function LobbyPage() {
 
             {/* Animated dots */}
             <div className="flex justify-center gap-1.5">
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="w-2 h-2 rounded-full bg-green-500/60 animate-bounce"
-                  style={{ animationDelay: `${i * 0.15}s` }}
-                />
-              ))}
+              <div className="w-2 h-2 rounded-full bg-green-500/60 animate-bounce [animation-delay:0ms]" />
+              <div className="w-2 h-2 rounded-full bg-green-500/60 animate-bounce [animation-delay:150ms]" />
+              <div className="w-2 h-2 rounded-full bg-green-500/60 animate-bounce [animation-delay:300ms]" />
             </div>
           </div>
 

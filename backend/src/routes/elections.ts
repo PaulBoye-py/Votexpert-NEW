@@ -44,6 +44,7 @@ electionsRouter.post('/', async (req: Request, res: Response) => {
       type: body.type,
       status: ElectionStatus.DRAFT,
       scheduled_start_at: body.scheduled_start_at,
+      scheduled_end_at: body.scheduled_end_at,
       show_live_results: body.show_live_results ?? true,
       leaderboard_mode: body.leaderboard_mode ?? 'at_end',
       created_at: now,
@@ -79,12 +80,13 @@ electionsRouter.put('/:electionId', async (req: Request, res: Response) => {
     await db.send(new UpdateCommand({
       TableName: Tables.ELECTIONS,
       Key: { election_id: req.params.electionId },
-      UpdateExpression: 'SET title = :title, #desc = :desc, scheduled_start_at = :sched, show_live_results = :slr, leaderboard_mode = :lbm, updated_at = :now',
+      UpdateExpression: 'SET title = :title, #desc = :desc, scheduled_start_at = :sched_start, scheduled_end_at = :sched_end, show_live_results = :slr, leaderboard_mode = :lbm, updated_at = :now',
       ExpressionAttributeNames: { '#desc': 'description' },
       ExpressionAttributeValues: {
         ':title': body.title ?? election.title,
         ':desc': body.description ?? election.description ?? null,
-        ':sched': body.scheduled_start_at ?? election.scheduled_start_at ?? null,
+        ':sched_start': body.scheduled_start_at ?? election.scheduled_start_at ?? null,
+        ':sched_end': body.scheduled_end_at ?? election.scheduled_end_at ?? null,
         ':slr': body.show_live_results ?? election.show_live_results,
         ':lbm': body.leaderboard_mode ?? election.leaderboard_mode ?? 'at_end',
         ':now': now,

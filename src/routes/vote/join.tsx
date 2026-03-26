@@ -274,21 +274,26 @@ function VoteJoinPage() {
                 <StatusBadge status={electionInfo.status} />
               </div>
 
-              {isScheduled && electionInfo.scheduled_start_at && (
-                <div className="flex items-center gap-2 rounded-lg bg-blue-500/10 border border-blue-500/20 px-4 py-2.5">
-                  <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      {electionInfo.status === 'ACTIVE' ? 'Voting open until' : 'Voting opens at'}
-                    </p>
-                    <p className="text-sm font-medium">
-                      {new Date(
-                        electionInfo.status === 'ACTIVE' && electionInfo.scheduled_end_at
-                          ? electionInfo.scheduled_end_at
-                          : electionInfo.scheduled_start_at
-                      ).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                    </p>
+              {isScheduled && (electionInfo.scheduled_start_at || electionInfo.scheduled_end_at) && (
+                <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span className="text-xs font-medium text-blue-700 dark:text-blue-300 uppercase tracking-wide">
+                      {electionInfo.status === 'ACTIVE' ? 'Voting in progress' : 'Voting window'}
+                    </span>
                   </div>
+                  {electionInfo.scheduled_start_at && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Opens</span>
+                      <span className="font-medium">{new Date(electionInfo.scheduled_start_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                    </div>
+                  )}
+                  {electionInfo.scheduled_end_at && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Closes</span>
+                      <span className="font-medium">{new Date(electionInfo.scheduled_end_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
