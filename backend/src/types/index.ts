@@ -101,6 +101,7 @@ export interface VoteSession {
   session_token: string      // UUID — the voter's anonymous identity
   election_id: string
   ip_address: string
+  user_agent?: string        // Browser user-agent for fingerprinting
   created_at: string
   ttl: number                // Unix epoch — session expires when election ends
   // Map of position_id → candidate_id for each vote cast this session

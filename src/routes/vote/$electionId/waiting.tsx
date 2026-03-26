@@ -82,7 +82,7 @@ function WaitingPage() {
       const existingToken = existing?.election_id === electionId ? existing.session_token : undefined;
       startVoteSession(electionId, existingToken)
         .then((sd) => {
-          setVoterSession({ ...session!, session_token: sd.session_token });
+          setVoterSession({ ...session!, session_token: sd.session_token, votes_cast: sd.votes_cast ?? {} });
           navigate({ to: '/vote/$electionId/ballot', params: { electionId } });
         })
         .catch(() => navigate({ to: '/vote/$electionId/ballot', params: { electionId } }));

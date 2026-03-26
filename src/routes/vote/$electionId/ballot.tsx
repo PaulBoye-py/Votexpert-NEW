@@ -32,11 +32,15 @@ function BallotPage() {
   const [selectedCandidate, setSelectedCandidate] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | undefined>();
   const [positionErrors, setPositionErrors] = React.useState<Record<string, string>>({});
-  const [votedPositions, setVotedPositions] = React.useState<Set<string>>(new Set());
+  const [votedPositions, setVotedPositions] = React.useState<Set<string>>(
+    () => new Set(Object.keys(session?.votes_cast ?? {}))
+  );
   // Scheduled: track selected candidate per position before confirming
   const [selectedCandidates, setSelectedCandidates] = React.useState<Record<string, string>>({});
   // Scheduled: track which candidate was actually voted for (for collapsed display)
-  const [votedCandidates, setVotedCandidates] = React.useState<Record<string, string>>({});
+  const [votedCandidates, setVotedCandidates] = React.useState<Record<string, string>>(
+    () => session?.votes_cast ?? {}
+  );
 
   // Redirect if no session
   React.useEffect(() => {
@@ -69,13 +73,6 @@ function BallotPage() {
     const id = setInterval(() => setCountdown((s) => Math.max(0, +(s - 0.1).toFixed(1))), 100);
     return () => clearInterval(id);
   }, [countdown]);
-
-  // Mark positions already voted (from session votes_cast)
-  React.useEffect(() => {
-    if (session && 'votes_cast' in (session as object)) {
-      // votes_cast may be populated from verify-token response
-    }
-  }, [session]);
 
   const voteMutation = useMutation({
     mutationFn: () => {

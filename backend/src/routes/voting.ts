@@ -23,7 +23,9 @@ votingRouter.post('/session', async (req: Request, res: Response) => {
 
     const isScheduled = !!(election.scheduled_start_at || election.scheduled_end_at)
 
-    // Return existing session if valid
+    const voterIp = req.ip ?? 'unknown'
+
+    // Return existing session if valid (by token)
     if (session_token) {
       const existing = (await db.send(new GetCommand({ TableName: Tables.VOTE_SESSIONS, Key: { session_token } }))).Item as VoteSession | undefined
       if (existing && existing.election_id === election_id) {
@@ -31,6 +33,21 @@ votingRouter.post('/session', async (req: Request, res: Response) => {
         const activePosition = (!isScheduled && election.started_at) ? getActivePosition(positions, election.started_at) : null
         return send.ok(res, { session_token: existing.session_token, votes_cast: existing.votes_cast, active_position: activePosition })
       }
+    }
+
+    // IP dedup — same device/browser gets the same session even if localStorage was cleared
+    const ipQuery = await db.send(new QueryCommand({
+      TableName: Tables.VOTE_SESSIONS,
+      IndexName: 'election-sessions-index',
+      KeyConditionExpression: 'election_id = :eid AND ip_address = :ip',
+      ExpressionAttributeValues: { ':eid': election_id, ':ip': voterIp },
+      Limit: 1,
+    }))
+    const existingByIp = ipQuery.Items?.[0] as VoteSession | undefined
+    if (existingByIp) {
+      const positions = await getPositions(election_id)
+      const activePosition = (!isScheduled && election.started_at) ? getActivePosition(positions, election.started_at) : null
+      return send.ok(res, { session_token: existingByIp.session_token, votes_cast: existingByIp.votes_cast, active_position: activePosition })
     }
 
     // Create new anonymous session
@@ -43,7 +60,8 @@ votingRouter.post('/session', async (req: Request, res: Response) => {
     const session: VoteSession = {
       session_token: uuid(),
       election_id,
-      ip_address: req.ip ?? 'unknown',
+      ip_address: voterIp,
+      user_agent: req.headers['user-agent'],
       created_at: new Date().toISOString(),
       ttl,
       votes_cast: {},
