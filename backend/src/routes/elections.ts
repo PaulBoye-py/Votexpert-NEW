@@ -42,7 +42,10 @@ electionsRouter.post('/', async (req: Request, res: Response) => {
       title: body.title.trim(),
       description: body.description?.trim(),
       type: body.type,
-      status: ElectionStatus.DRAFT,
+      // Scheduled elections go straight to SCHEDULED so the tick Lambda can pick them up
+      status: (body.scheduled_start_at || body.scheduled_end_at)
+        ? ElectionStatus.SCHEDULED
+        : ElectionStatus.DRAFT,
       scheduled_start_at: body.scheduled_start_at,
       scheduled_end_at: body.scheduled_end_at,
       show_live_results: body.show_live_results ?? true,

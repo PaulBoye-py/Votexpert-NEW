@@ -22,9 +22,11 @@ export async function handler(): Promise<void> {
   const result = await db.send(
     new ScanCommand({
       TableName: Tables.ELECTIONS,
-      FilterExpression: '#status IN (:scheduled, :active) AND attribute_exists(scheduled_end_at)',
+      // Include DRAFT too — scheduled elections may have been created before status defaulted to SCHEDULED
+      FilterExpression: '#status IN (:draft, :scheduled, :active) AND attribute_exists(scheduled_start_at)',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: {
+        ':draft': ElectionStatus.DRAFT,
         ':scheduled': ElectionStatus.SCHEDULED,
         ':active': ElectionStatus.ACTIVE,
       },
@@ -36,17 +38,21 @@ export async function handler(): Promise<void> {
   const transitions = elections.map(async (election) => {
     const { election_id, status, scheduled_start_at, scheduled_end_at } = election
 
-    // 1. SCHEDULED → ACTIVE: start time has arrived
-    if (status === ElectionStatus.SCHEDULED && scheduled_start_at && scheduled_start_at <= now) {
+    // 1. DRAFT or SCHEDULED → ACTIVE: start time has arrived
+    if (
+      (status === ElectionStatus.DRAFT || status === ElectionStatus.SCHEDULED) &&
+      scheduled_start_at && scheduled_start_at <= now
+    ) {
       await db.send(
         new UpdateCommand({
           TableName: Tables.ELECTIONS,
           Key: { election_id },
           UpdateExpression: 'SET #status = :active, started_at = :now, updated_at = :now',
-          ConditionExpression: '#status = :scheduled',
+          ConditionExpression: '#status IN (:draft, :scheduled)',
           ExpressionAttributeNames: { '#status': 'status' },
           ExpressionAttributeValues: {
             ':active': ElectionStatus.ACTIVE,
+            ':draft': ElectionStatus.DRAFT,
             ':scheduled': ElectionStatus.SCHEDULED,
             ':now': now,
           },
