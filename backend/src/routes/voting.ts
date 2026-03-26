@@ -21,19 +21,25 @@ votingRouter.post('/session', async (req: Request, res: Response) => {
     if (election.type !== ElectionType.OPEN) return send.conflict(res, 'This election requires an invitation')
     if (election.status !== ElectionStatus.ACTIVE) return send.conflict(res, 'This election is not currently active')
 
+    const isScheduled = !!(election.scheduled_start_at || election.scheduled_end_at)
+
     // Return existing session if valid
     if (session_token) {
       const existing = (await db.send(new GetCommand({ TableName: Tables.VOTE_SESSIONS, Key: { session_token } }))).Item as VoteSession | undefined
       if (existing && existing.election_id === election_id) {
         const positions = await getPositions(election_id)
-        const activePosition = election.started_at ? getActivePosition(positions, election.started_at) : null
+        const activePosition = (!isScheduled && election.started_at) ? getActivePosition(positions, election.started_at) : null
         return send.ok(res, { session_token: existing.session_token, votes_cast: existing.votes_cast, active_position: activePosition })
       }
     }
 
     // Create new anonymous session
     const positions = await getPositions(election_id)
-    const ttl = Math.floor((new Date(election.started_at!).getTime() + (getTotalDuration(positions) + 3600) * 1000) / 1000)
+    // For scheduled elections use scheduled_end_at as TTL basis; fall back to 1 hr past start
+    const sessionEndMs = isScheduled && election.scheduled_end_at
+      ? new Date(election.scheduled_end_at).getTime() + 3600 * 1000
+      : new Date(election.started_at!).getTime() + (getTotalDuration(positions) + 3600) * 1000
+    const ttl = Math.floor(sessionEndMs / 1000)
     const session: VoteSession = {
       session_token: uuid(),
       election_id,
@@ -85,11 +91,18 @@ votingRouter.post('/cast', async (req: Request, res: Response) => {
     if (!election) return send.notFound(res, 'Election')
     if (election.status !== ElectionStatus.ACTIVE) return send.conflict(res, 'This election is not accepting votes')
 
-    // Validate active position
+    const isScheduled = !!(election.scheduled_start_at || election.scheduled_end_at)
+
+    // Validate active position — immediate elections use timers; scheduled elections allow any position
     const positions = await getPositions(body.election_id)
-    const activeState = election.started_at ? getActivePosition(positions, election.started_at) : null
-    if (!activeState) return send.conflict(res, 'No position is currently open for voting')
-    if (activeState.position.position_id !== body.position_id) return send.conflict(res, 'This position is not currently open for voting')
+    if (!isScheduled) {
+      const activeState = election.started_at ? getActivePosition(positions, election.started_at) : null
+      if (!activeState) return send.conflict(res, 'No position is currently open for voting')
+      if (activeState.position.position_id !== body.position_id) return send.conflict(res, 'This position is not currently open for voting')
+    } else {
+      const validPosition = positions.find(p => p.position_id === body.position_id)
+      if (!validPosition) return send.notFound(res, 'Position')
+    }
 
     // Validate candidate
     const candidate = (await db.send(new GetCommand({ TableName: Tables.CANDIDATES, Key: { position_id: body.position_id, candidate_id: body.candidate_id } }))).Item as Candidate | undefined
@@ -122,14 +135,19 @@ votingRouter.post('/cast', async (req: Request, res: Response) => {
       if (voter.token_expires_at && new Date(voter.token_expires_at) < new Date()) return send.unauthorized(res, 'Your invite link has expired')
       if (voter.votes_cast[body.position_id]) return send.conflict(res, 'You have already voted for this position')
 
-      const isLastPosition = positions[positions.length - 1].position_id === body.position_id
       const now = new Date().toISOString()
+      // For scheduled elections, mark voted_at when all positions have been voted on
+      const allPositionIds = new Set(positions.map(p => p.position_id))
+      const castAfterThis = { ...voter.votes_cast, [body.position_id]: body.candidate_id }
+      const allVoted = isScheduled
+        ? allPositionIds.size > 0 && [...allPositionIds].every(pid => castAfterThis[pid])
+        : positions[positions.length - 1].position_id === body.position_id
       await db.send(new UpdateCommand({
         TableName: Tables.VOTERS,
         Key: { election_id: body.election_id, voter_id: voter.voter_id },
-        UpdateExpression: `SET votes_cast.#pid = :cid${isLastPosition ? ', voted_at = :now' : ''}`,
+        UpdateExpression: `SET votes_cast.#pid = :cid${allVoted ? ', voted_at = :now' : ''}`,
         ExpressionAttributeNames: { '#pid': body.position_id },
-        ExpressionAttributeValues: { ':cid': body.candidate_id, ...(isLastPosition ? { ':now': now } : {}) },
+        ExpressionAttributeValues: { ':cid': body.candidate_id, ...(allVoted ? { ':now': now } : {}) },
       }))
       voterRef = voter.voter_id
     }
