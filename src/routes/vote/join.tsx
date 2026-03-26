@@ -96,7 +96,7 @@ function VoteJoinPage() {
   };
 
   // Is this a scheduled election (time window mode)?
-  const isScheduled = !!(electionInfo?.scheduled_end_at);
+  const isScheduled = !!(electionInfo?.scheduled_start_at || electionInfo?.scheduled_end_at);
 
   // ── Join / enter ────────────────────────────────────────────────────────────
   const joinMutation = useMutation({

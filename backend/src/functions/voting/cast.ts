@@ -53,7 +53,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // ── Validate the active position (immediate elections only) ──────────────
     // Scheduled elections have all positions open simultaneously during the window;
     // immediate elections enforce sequential position timing.
-    const isScheduled = !!election.scheduled_end_at
+    const isScheduled = !!(election.scheduled_start_at || election.scheduled_end_at)
     if (!isScheduled) {
       const activeState = election.started_at
         ? getActivePosition(positions, election.started_at)

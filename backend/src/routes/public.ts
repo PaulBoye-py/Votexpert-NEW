@@ -67,7 +67,7 @@ publicRouter.get('/elections/:electionId', async (req: Request, res: Response) =
       }))).Items ?? []).map(r => [`${r.position_id}#${r.candidate_id}`, r.vote_count as number])
     )
 
-    const isScheduled = !!election.scheduled_end_at
+    const isScheduled = !!(election.scheduled_start_at || election.scheduled_end_at)
     const activePosition = (!isScheduled && election.started_at)
       ? getActivePosition(positions, election.started_at)
       : null

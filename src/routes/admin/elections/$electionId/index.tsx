@@ -234,7 +234,7 @@ function AdminElectionDetailsPage() {
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
   const isEditable = election?.status === 'DRAFT' || election?.status === 'SCHEDULED';
-  const isScheduledMode = !!election?.scheduled_end_at;
+  const isScheduledMode = !!(election?.scheduled_start_at || election?.scheduled_end_at);
   const electionCode = election?.election_code ?? '';
   const voteUrl = electionCode
     ? `${window.location.origin}/vote/join?code=${electionCode}`

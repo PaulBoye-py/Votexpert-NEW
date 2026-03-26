@@ -55,7 +55,7 @@ function BallotPage() {
 
   const activePosition = data?.active_position;
   const election = data?.election;
-  const isScheduled = !!election?.scheduled_end_at;
+  const isScheduled = !!(election?.scheduled_start_at || election?.scheduled_end_at);
 
   // Smooth local countdown seeded from server value on each poll
   const [countdown, setCountdown] = React.useState(0);
