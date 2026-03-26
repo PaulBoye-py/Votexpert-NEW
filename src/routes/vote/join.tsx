@@ -33,8 +33,9 @@ export const voteJoinRoute = createRoute({
   path: '/vote/join',
   component: VoteJoinPage,
   validateSearch: (s: Record<string, unknown>): JoinSearch => ({
-    code: s.code as string | undefined,
-    election: s.election as string | undefined,
+    // Coerce to string — TanStack Router v1 parses numeric-looking params as numbers
+    code: s.code != null ? String(s.code) : undefined,
+    election: s.election != null ? String(s.election) : undefined,
   }),
 });
 

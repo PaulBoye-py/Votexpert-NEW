@@ -405,7 +405,7 @@ function AdminElectionDetailsPage() {
 
                 {/* Action buttons */}
                 <div className="flex flex-wrap gap-3">
-                  {/* Immediate elections only: presenter mode */}
+                  {/* Immediate elections: presenter is the primary action */}
                   {!isScheduledMode && (election.status === 'DRAFT' || election.status === 'SCHEDULED') && (
                     <Button
                       className="bg-green-600 hover:bg-green-700 text-white gap-2"
@@ -423,6 +423,17 @@ function AdminElectionDetailsPage() {
                     >
                       <BarChart3 className="mr-2 h-4 w-4" />
                       Live Presenter
+                    </Button>
+                  )}
+                  {/* Scheduled elections: presenter is optional */}
+                  {isScheduledMode && election.status === 'ACTIVE' && (
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => navigate({ to: '/admin/elections/$electionId/present', params: { electionId } })}
+                    >
+                      <BarChart3 className="h-4 w-4" />
+                      Open Presenter (optional)
                     </Button>
                   )}
                   {/* End election — available for all ACTIVE elections */}
