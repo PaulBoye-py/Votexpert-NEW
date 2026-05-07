@@ -152,6 +152,7 @@ export interface Payment {
   email: string
   paid_at: string   // ISO 8601
   source: 'verify' | 'webhook'
+  receipt_url?: string // S3 URL to PDF receipt
 }
 
 // ─── Org Voter Pool ───────────────────────────────────────────────────────────

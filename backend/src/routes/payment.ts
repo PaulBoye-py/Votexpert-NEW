@@ -3,16 +3,64 @@
 import { Router, Request, Response } from 'express'
 import axios from 'axios'
 import crypto from 'crypto'
-import { PutCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
+import { PutCommand, UpdateCommand, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { v4 as uuid } from 'uuid'
 import { requireAuth } from '../middleware/auth'
 import { send } from '../lib/utils/response'
 import { db, Tables } from '../lib/db/client'
+import { generateReceiptPDF } from '../lib/pdf/receiptGenerator'
 
 export const paymentRouter = Router()
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY!
 const CLIENT_URL = process.env.CLIENT_URL ?? 'https://votexpert.online'
+const UPLOADS_BUCKET = process.env.UPLOADS_BUCKET || 'votexpert-media'
+
+const s3 = new S3Client({})
+
+// ─── Helper: Generate and upload receipt ──────────────────────────────────────
+async function generateAndUploadReceipt(
+  payment: any,
+  org_id: string
+): Promise<string | undefined> {
+  try {
+    // Fetch org details for receipt
+    const orgResult = await db.send(
+      new GetCommand({
+        TableName: Tables.ORGS,
+        Key: { org_id },
+      })
+    )
+
+    if (!orgResult.Item) {
+      console.warn(`Org ${org_id} not found for receipt generation`)
+      return undefined
+    }
+
+    const org = orgResult.Item as any
+    const pdfBuffer = await generateReceiptPDF(payment, {
+      org_id,
+      org_name: org.org_name || 'Unknown Organization',
+      email: org.email,
+    })
+
+    const key = `receipts/${org_id}/${payment.reference}.pdf`
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: UPLOADS_BUCKET,
+        Key: key,
+        Body: pdfBuffer,
+        ContentType: 'application/pdf',
+      })
+    )
+
+    return `https://${UPLOADS_BUCKET}.s3.amazonaws.com/${key}`
+  } catch (err) {
+    console.error('Receipt generation/upload failed:', err)
+    return undefined
+  }
+}
 
 // ─── POST /payment/initialize ─────────────────────────────────────────────────
 // Initialize a Paystack transaction and return the authorization URL
@@ -93,19 +141,27 @@ paymentRouter.get('/verify/:reference', requireAuth, async (req: Request, res: R
     }))
 
     if (!existing.Items?.length) {
+      const paymentRecord = {
+        payment_id: uuid(),
+        org_id,
+        plan,
+        amount:     amount / 100, // store in Naira
+        reference,
+        email:      customer.email,
+        paid_at:    new Date().toISOString(),
+        source:     'verify' as const,
+      }
+
+      // Generate and upload receipt
+      const receipt_url = await generateAndUploadReceipt(paymentRecord, org_id)
+      if (receipt_url) {
+        (paymentRecord as any).receipt_url = receipt_url
+      }
+
       await Promise.all([
         db.send(new PutCommand({
           TableName: Tables.PAYMENTS,
-          Item: {
-            payment_id: uuid(),
-            org_id,
-            plan,
-            amount:     amount / 100, // store in Naira
-            reference,
-            email:      customer.email,
-            paid_at:    new Date().toISOString(),
-            source:     'verify',
-          },
+          Item: paymentRecord,
         })),
         db.send(new UpdateCommand({
           TableName: Tables.ORGS,
@@ -170,19 +226,27 @@ paymentRouter.post('/webhook', async (req: Request, res: Response) => {
         }))
 
         if (!existing.Items?.length) {
+          const paymentRecord = {
+            payment_id: uuid(),
+            org_id,
+            plan,
+            amount:     amount / 100,
+            reference,
+            email:      customer?.email ?? '',
+            paid_at:    new Date().toISOString(),
+            source:     'webhook' as const,
+          }
+
+          // Generate and upload receipt
+          const receipt_url = await generateAndUploadReceipt(paymentRecord, org_id)
+          if (receipt_url) {
+            (paymentRecord as any).receipt_url = receipt_url
+          }
+
           await Promise.all([
             db.send(new PutCommand({
               TableName: Tables.PAYMENTS,
-              Item: {
-                payment_id: uuid(),
-                org_id,
-                plan,
-                amount:     amount / 100,
-                reference,
-                email:      customer?.email ?? '',
-                paid_at:    new Date().toISOString(),
-                source:     'webhook',
-              },
+              Item: paymentRecord,
             })),
             db.send(new UpdateCommand({
               TableName: Tables.ORGS,
@@ -203,5 +267,31 @@ paymentRouter.post('/webhook', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Webhook processing error:', err)
     res.sendStatus(200) // always 200 so Paystack stops retrying
+  }
+})
+
+// ─── GET /payment/history ───────────────────────────────────────────────────────
+// Get payment history for the authenticated org
+paymentRouter.get('/history', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const org_id = (req.user as any)?.org_id
+
+    if (!org_id) {
+      return send.badRequest(res, 'Organization ID not found')
+    }
+
+    const result = await db.send(
+      new QueryCommand({
+        TableName: Tables.PAYMENTS,
+        IndexName: 'org-payments-index',
+        KeyConditionExpression: 'org_id = :org_id',
+        ExpressionAttributeValues: { ':org_id': org_id },
+        ScanIndexForward: false, // newest first
+      })
+    )
+
+    send.ok(res, result.Items || [])
+  } catch (err) {
+    send.serverError(res, err)
   }
 })
