@@ -7,9 +7,12 @@ import * as s3 from 'aws-cdk-lib/aws-s3'
 import * as events from 'aws-cdk-lib/aws-events'
 import * as eventsTargets from 'aws-cdk-lib/aws-events-targets'
 import * as path from 'path'
+import { config } from 'dotenv'
 import { Construct } from 'constructs'
 import { DatabaseStack } from './database-stack'
 import { AuthStack } from './auth-stack'
+
+config()
 
 interface ApiStackProps extends cdk.StackProps {
   db: DatabaseStack
