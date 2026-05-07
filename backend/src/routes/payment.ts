@@ -274,7 +274,7 @@ paymentRouter.post('/webhook', async (req: Request, res: Response) => {
 // Get payment history for the authenticated org
 paymentRouter.get('/history', requireAuth, async (req: Request, res: Response) => {
   try {
-    const org_id = (req.user as any)?.org_id
+    const org_id = (req as any).org?.org_id
 
     if (!org_id) {
       return send.badRequest(res, 'Organization ID not found')
