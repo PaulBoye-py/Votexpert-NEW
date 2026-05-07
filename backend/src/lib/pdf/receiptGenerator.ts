@@ -27,8 +27,13 @@ export async function generateReceiptPDF(
     doc.on('end', () => resolve(Buffer.concat(buffers)));
     doc.on('error', reject);
 
-    // Header
+    // Header with logo and company info
     doc.fillColor(COLORS.primary).fontSize(24).font('Helvetica-Bold').text('VoteXpert', { align: 'left' });
+    doc.moveDown(0.2);
+    doc.fillColor(COLORS.lightText).fontSize(9).font('Helvetica');
+    doc.text('2, Nnobi Street, Surulere', { align: 'left' });
+    doc.text('Lagos, Nigeria', { align: 'left' });
+    doc.text('support@votexpert.com', { align: 'left' });
     doc.moveDown(0.3);
     doc.fillColor(COLORS.text).fontSize(11).font('Helvetica').text('Payment Receipt', { align: 'left' });
 

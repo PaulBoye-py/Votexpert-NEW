@@ -10,6 +10,7 @@ import { requireAuth } from '../middleware/auth'
 import { send } from '../lib/utils/response'
 import { db, Tables } from '../lib/db/client'
 import { generateReceiptPDF } from '../lib/pdf/receiptGenerator'
+import { sendEmail, paymentReceiptEmailHtml } from '../lib/email/mailer'
 
 export const paymentRouter = Router()
 
@@ -23,7 +24,7 @@ const s3 = new S3Client({})
 async function generateAndUploadReceipt(
   payment: any,
   org_id: string
-): Promise<string | undefined> {
+): Promise<{ url?: string; pdfBuffer?: Buffer }> {
   try {
     // Fetch org details for receipt
     const orgResult = await db.send(
@@ -35,7 +36,7 @@ async function generateAndUploadReceipt(
 
     if (!orgResult.Item) {
       console.warn(`Org ${org_id} not found for receipt generation`)
-      return undefined
+      return {}
     }
 
     const org = orgResult.Item as any
@@ -55,10 +56,50 @@ async function generateAndUploadReceipt(
       })
     )
 
-    return `https://${UPLOADS_BUCKET}.s3.amazonaws.com/${key}`
+    return {
+      url: `https://${UPLOADS_BUCKET}.s3.amazonaws.com/${key}`,
+      pdfBuffer,
+    }
   } catch (err) {
     console.error('Receipt generation/upload failed:', err)
-    return undefined
+    return {}
+  }
+}
+
+// ─── Helper: Send receipt email ────────────────────────────────────────────────
+async function sendReceiptEmail(payment: any, pdfBuffer?: Buffer): Promise<void> {
+  if (!pdfBuffer) return
+
+  try {
+    const planName = payment.plan.charAt(0).toUpperCase() + payment.plan.slice(1).replace(/_/g, ' ')
+    const date = new Date(payment.paid_at).toLocaleString('en-NG', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+
+    await sendEmail({
+      to: payment.email,
+      subject: `Payment Receipt - ${payment.reference}`,
+      html: paymentReceiptEmailHtml({
+        planName,
+        amount: `₦${payment.amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`,
+        reference: payment.reference,
+        date,
+        orgName: 'VoteXpert',
+      }),
+      attachments: [
+        {
+          filename: `receipt-${payment.reference}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf',
+        },
+      ],
+    })
+  } catch (err) {
+    console.error('Receipt email send failed:', err)
   }
 }
 
@@ -153,9 +194,9 @@ paymentRouter.get('/verify/:reference', requireAuth, async (req: Request, res: R
       }
 
       // Generate and upload receipt
-      const receipt_url = await generateAndUploadReceipt(paymentRecord, org_id)
-      if (receipt_url) {
-        (paymentRecord as any).receipt_url = receipt_url
+      const receipt = await generateAndUploadReceipt(paymentRecord, org_id)
+      if (receipt.url) {
+        (paymentRecord as any).receipt_url = receipt.url
       }
 
       await Promise.all([
@@ -173,6 +214,7 @@ paymentRouter.get('/verify/:reference', requireAuth, async (req: Request, res: R
             ':activated_at': new Date().toISOString(),
           },
         })),
+        sendReceiptEmail(paymentRecord, receipt.pdfBuffer),
       ])
     }
 
@@ -238,9 +280,9 @@ paymentRouter.post('/webhook', async (req: Request, res: Response) => {
           }
 
           // Generate and upload receipt
-          const receipt_url = await generateAndUploadReceipt(paymentRecord, org_id)
-          if (receipt_url) {
-            (paymentRecord as any).receipt_url = receipt_url
+          const receipt = await generateAndUploadReceipt(paymentRecord, org_id)
+          if (receipt.url) {
+            (paymentRecord as any).receipt_url = receipt.url
           }
 
           await Promise.all([
@@ -258,6 +300,7 @@ paymentRouter.post('/webhook', async (req: Request, res: Response) => {
                 ':activated_at': new Date().toISOString(),
               },
             })),
+            sendReceiptEmail(paymentRecord, receipt.pdfBuffer),
           ])
         }
       }

@@ -8,9 +8,10 @@ import { Button } from '@/components/atoms';
 import { $user, $isAuthenticated, $isAdmin, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
 import { Check, X, Zap, Shield, Star, ArrowUp, Sparkles } from 'lucide-react';
-import { PLANS, type PlanKey, initializePayment } from '@/api/services/payment.service';
+import { PLANS, type PlanKey, initializePayment, verifyPayment } from '@/api/services/payment.service';
 import { getMyOrg } from '@/api/services/admin.service';
 import { getPendingPlan, clearPendingPlan } from '@/lib/pendingPlan';
+import { PaymentProcessingOverlay } from '@/components/organisms';
 import { cn } from '@/lib/utils';
 import type { Admin } from '@/types';
 
@@ -38,6 +39,8 @@ function AdminPricingPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [orgId, setOrgId] = React.useState<string | null>(null);
   const [currentPlanKey, setCurrentPlanKey] = React.useState<PlanKey | null>(null);
+  const [processingStep, setProcessingStep] = React.useState<1 | 2 | 3 | 'success' | 'error' | null>(null);
+  const [processingError, setProcessingError] = React.useState<string | null>(null);
   const pendingPlan = React.useMemo(() => getPendingPlan(), []);
   const highlightRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -88,6 +91,8 @@ function AdminPricingPage() {
 
     setLoadingPlan(planKey);
     setError(null);
+    setProcessingError(null);
+    setProcessingStep(1);
     clearPendingPlan();
 
     const plan = PLANS[planKey];
@@ -100,24 +105,72 @@ function AdminPricingPage() {
         org_id: orgId,
       });
 
-      window.location.href = result.authorization_url;
+      const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '';
+
+      // Open Paystack modal
+      const handler = (window as any).PaystackPop.setup({
+        key: publicKey,
+        email: user.email,
+        amount: plan.amount * 100, // convert to kobo
+        ref: result.reference,
+        onClose: () => {
+          setProcessingStep('error');
+          setProcessingError('Payment was cancelled');
+          setLoadingPlan(null);
+        },
+        onSuccess: async () => {
+          try {
+            setProcessingStep(2);
+            await verifyPayment(result.reference);
+            setProcessingStep(3);
+
+            setTimeout(() => {
+              setProcessingStep('success');
+              setTimeout(() => {
+                setProcessingStep(null);
+                setLoadingPlan(null);
+                navigate({ to: '/admin/dashboard' });
+              }, 2000);
+            }, 1000);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Payment verification failed';
+            setProcessingStep('error');
+            setProcessingError(message);
+            setLoadingPlan(null);
+          }
+        },
+      });
+      handler.openIframe();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Payment initialization failed. Please try again.';
       setError(message);
       setLoadingPlan(null);
+      setProcessingStep(null);
     }
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <AdminLayout
-        adminName={user?.name || 'Admin'}
-        adminEmail={user?.email}
-        orgName={user?.org_name}
-        currentPath="/admin/pricing"
-        onNavigate={(path) => navigate({ to: path })}
-        onLogout={() => {
-          logout();
+    <>
+      {processingStep && (
+        <PaymentProcessingOverlay
+          isOpen={true}
+          step={processingStep}
+          error={processingError || undefined}
+          onRetry={() => {
+            setProcessingStep(null);
+            setProcessingError(null);
+          }}
+        />
+      )}
+      <AdminLayout
+          adminName={user?.name || 'Admin'}
+          adminEmail={user?.email}
+          orgName={user?.org_name}
+          currentPath="/admin/pricing"
+          onNavigate={(path) => navigate({ to: path })}
+          onLogout={() => {
+            logout();
           navigate({ to: '/admin/login' });
         }}
       >
@@ -388,5 +441,6 @@ function AdminPricingPage() {
 
       </div>
     </AdminLayout>
+    </>
   );
 }

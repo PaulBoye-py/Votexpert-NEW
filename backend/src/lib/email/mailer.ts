@@ -26,6 +26,11 @@ interface SendEmailOptions {
   subject: string
   html: string
   text?: string
+  attachments?: Array<{
+    filename: string
+    content: Buffer
+    contentType: string
+  }>
 }
 
 export async function sendEmail(opts: SendEmailOptions): Promise<void> {
@@ -35,10 +40,49 @@ export async function sendEmail(opts: SendEmailOptions): Promise<void> {
     subject: opts.subject,
     html: opts.html,
     text: opts.text,
+    attachments: opts.attachments,
   })
 }
 
 // ─── Email Templates ──────────────────────────────────────────────────────────
+
+export function paymentReceiptEmailHtml(opts: {
+  planName: string
+  amount: string
+  reference: string
+  date: string
+  orgName: string
+}): string {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+      <h2 style="color: #1a1a1a;">Payment Received</h2>
+      <p>Thank you for your payment! Your transaction has been processed successfully.</p>
+
+      <div style="background-color: #f5f5f5; border-left: 4px solid #2563eb; padding: 16px; margin: 20px 0;">
+        <p style="margin: 8px 0;"><strong>Plan:</strong> ${opts.planName}</p>
+        <p style="margin: 8px 0;"><strong>Amount:</strong> ${opts.amount}</p>
+        <p style="margin: 8px 0;"><strong>Reference:</strong> ${opts.reference}</p>
+        <p style="margin: 8px 0;"><strong>Date:</strong> ${opts.date}</p>
+      </div>
+
+      <p>A detailed receipt is attached to this email for your records.</p>
+
+      <p style="color: #666; font-size: 14px;">
+        If you have any questions about this transaction, please contact our support team.
+      </p>
+
+      <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+      <p style="color: #999; font-size: 12px;">Powered by VoteXpert</p>
+    </body>
+    </html>
+  `
+}
 
 export function inviteEmailHtml(opts: {
   electionTitle: string
