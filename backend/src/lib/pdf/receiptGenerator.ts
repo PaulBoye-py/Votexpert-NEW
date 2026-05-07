@@ -19,7 +19,7 @@ export async function generateReceiptPDF(
   payment: Payment,
   org: ReceiptOrg
 ): Promise<Buffer> {
-  const doc = new PDFDocument({ size: 'A4', margin: 40 });
+  const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
   const buffers: Buffer[] = [];
 
   return new Promise((resolve, reject) => {
@@ -28,25 +28,25 @@ export async function generateReceiptPDF(
     doc.on('error', reject);
 
     // Header with logo and company info
-    doc.fillColor(COLORS.primary).fontSize(24).font('Helvetica-Bold').text('VoteXpert', { align: 'left' });
+    doc.fillColor(COLORS.primary).fontSize(24).font('Courier-Bold').text('VoteXpert', { align: 'left' });
     doc.moveDown(0.2);
-    doc.fillColor(COLORS.lightText).fontSize(9).font('Helvetica');
+    doc.fillColor(COLORS.lightText).fontSize(9).font('Courier');
     doc.text('2, Nnobi Street, Surulere', { align: 'left' });
     doc.text('Lagos, Nigeria', { align: 'left' });
     doc.text('support@votexpert.com', { align: 'left' });
     doc.moveDown(0.3);
-    doc.fillColor(COLORS.text).fontSize(11).font('Helvetica').text('Payment Receipt', { align: 'left' });
+    doc.fillColor(COLORS.text).fontSize(11).font('Courier').text('Payment Receipt', { align: 'left' });
 
     // Horizontal line
     doc.moveTo(40, doc.y).lineTo(550, doc.y).stroke(COLORS.border);
     doc.moveDown(0.8);
 
     // Receipt number and date
-    doc.fillColor(COLORS.text).fontSize(10).font('Helvetica-Bold');
+    doc.fillColor(COLORS.text).fontSize(10).font('Courier-Bold');
     doc.text('Receipt Details', { underline: true });
     doc.moveDown(0.4);
 
-    doc.fontSize(9).font('Helvetica').fillColor(COLORS.text);
+    doc.fontSize(9).font('Courier').fillColor(COLORS.text);
     doc.text(`Receipt Date: ${new Date(payment.paid_at).toLocaleString('en-NG', {
       year: 'numeric',
       month: 'long',

@@ -361,30 +361,32 @@ function AdminPricingPage() {
         </div>
 
         {/* ── Bottom CTA Banner ── */}
-        <div className="bg-primary/10 border border-primary/20 rounded-xl p-8 text-center space-y-4">
-          <h2 className="text-xl font-bold text-foreground">
-            Ready to run your first election?
-          </h2>
-          <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            Get started for free today. Upgrade whenever you need more power.
-          </p>
-          <div className="flex items-center justify-center gap-3 flex-wrap">
-            <Button
-              variant="default"
-              onClick={() => handleSelectPlan('free')}
-              disabled={loadingPlan !== null}
-            >
-              Start for Free
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => handleSelectPlan('pro')}
-              disabled={loadingPlan !== null}
-            >
-              View Pro Plan
-            </Button>
+        {currentPlanKey === 'free' && (
+          <div className="bg-primary/10 border border-primary/20 rounded-xl p-8 text-center space-y-4">
+            <h2 className="text-xl font-bold text-foreground">
+              Ready to run your first election?
+            </h2>
+            <p className="text-muted-foreground text-sm max-w-md mx-auto">
+              Get started for free today. Upgrade whenever you need more power.
+            </p>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <Button
+                variant="default"
+                onClick={() => handleSelectPlan('free')}
+                disabled={loadingPlan !== null}
+              >
+                Start for Free
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleSelectPlan('pro')}
+                disabled={loadingPlan !== null}
+              >
+                View Pro Plan
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
     </AdminLayout>
