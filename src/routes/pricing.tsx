@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { createRoute, Link } from '@tanstack/react-router';
+import { createRoute, Link, useNavigate } from '@tanstack/react-router';
 import { rootRoute } from './__root';
 import { Vote, Zap, Star, Check, X, Shield, Menu, ArrowRight, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/atoms';
@@ -8,6 +8,7 @@ import { PLANS, type PlanKey } from '@/api/services/payment.service';
 import { useStore } from '@nanostores/react';
 import { $isAuthenticated } from '@/stores';
 import { cn } from '@/lib/utils';
+import { setPendingPlan } from '@/lib/pendingPlan';
 
 export const pricingRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -18,10 +19,16 @@ export const pricingRoute = createRoute({
 function PublicPricingPage() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const isAuthenticated = useStore($isAuthenticated);
+  const navigate = useNavigate();
 
-  // If authenticated, plan cards link to admin pricing (where they can pay).
-  // If not, they go to signup first.
-  const ctaTarget = isAuthenticated ? '/admin/pricing' : '/admin/signup';
+  const handleSelectPlan = (planKey: PlanKey) => {
+    if (isAuthenticated) {
+      navigate({ to: '/admin/pricing' });
+    } else {
+      setPendingPlan(planKey);
+      navigate({ to: '/admin/signup' });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
@@ -178,11 +185,9 @@ function PublicPricingPage() {
                 <Button
                   variant={plan.ctaVariant}
                   className="w-full"
-                  asChild
+                  onClick={() => handleSelectPlan(planKey)}
                 >
-                  <Link to={ctaTarget}>
-                    {isAuthenticated ? plan.cta : planKey === 'free' ? 'Get Started Free' : 'Get Started'}
-                  </Link>
+                  {isAuthenticated ? plan.cta : planKey === 'free' ? 'Get Started Free' : 'Get Started'}
                 </Button>
               </div>
             );
@@ -236,11 +241,9 @@ function PublicPricingPage() {
         <div className="max-w-2xl mx-auto cta-banner-glow rounded-2xl border border-primary/20 p-8 sm:p-12 text-center space-y-5">
           <h2 className="text-2xl sm:text-3xl font-bold">Ready to run your first election?</h2>
           <p className="text-muted-foreground">Sign up in seconds. No credit card required for the Free Plan.</p>
-          <Button size="lg" className="gap-2 px-8" asChild>
-            <Link to="/admin/signup">
-              Create your account
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+          <Button size="lg" className="gap-2 px-8" onClick={() => handleSelectPlan('free')}>
+            Create your account
+            <ArrowRight className="h-4 w-4" />
           </Button>
         </div>
       </section>

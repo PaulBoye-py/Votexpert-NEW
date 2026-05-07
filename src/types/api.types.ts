@@ -24,6 +24,8 @@ export interface Org {
   name: string;
   cognito_user_id: string;
   created_at: string;
+  plan?: string;             // plan key: 'free' | 'standard' | 'pro' | 'standard_pro'
+  plan_activated_at?: string;
 }
 
 export interface Admin {

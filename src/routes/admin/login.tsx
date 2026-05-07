@@ -7,6 +7,7 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } fro
 import { FormField, AlertMessage } from '@/components/molecules';
 import { cognitoSignIn, decodeIdToken } from '@/api/services/cognito.service';
 import { setTokens, setUser } from '@/stores/auth.store';
+import { getPendingPlan, clearPendingPlan } from '@/lib/pendingPlan';
 import { Loader2 } from 'lucide-react';
 
 export const adminLoginRoute = createRoute({
@@ -35,7 +36,13 @@ function AdminLoginPage() {
         email: claims.email,
         org_name: claims['custom:org_name'] ?? '',
       });
-      navigate({ to: '/admin/dashboard' });
+      const pendingPlan = getPendingPlan();
+      if (pendingPlan && pendingPlan !== 'free') {
+        navigate({ to: '/admin/pricing' });
+      } else {
+        clearPendingPlan();
+        navigate({ to: '/admin/dashboard' });
+      }
     },
     onError: (err: Error) => {
       setApiError(err.message);

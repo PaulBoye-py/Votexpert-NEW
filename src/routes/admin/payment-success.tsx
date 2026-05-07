@@ -8,7 +8,7 @@ import { Button } from '@/components/atoms';
 import { $user, $isAuthenticated, $isAdmin, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { verifyPayment } from '@/api/services/payment.service';
+import { verifyPayment, PLANS, type PlanKey } from '@/api/services/payment.service';
 import type { Admin } from '@/types';
 
 // ─── Route Definition ─────────────────────────────────────────────────────────
@@ -61,7 +61,9 @@ function AdminPaymentSuccessPage() {
         const result = await verifyPayment(paymentReference);
 
         if (result.success) {
-          setPlanName(result.plan);
+          // result.plan is the plan key — look up the display name
+          const displayName = PLANS[result.plan as PlanKey]?.name ?? result.plan;
+          setPlanName(displayName);
           setStatus('success');
         } else {
           setStatus('failed');

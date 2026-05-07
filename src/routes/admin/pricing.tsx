@@ -7,10 +7,16 @@ import { AdminLayout } from '@/components/templates';
 import { Button } from '@/components/atoms';
 import { $user, $isAuthenticated, $isAdmin, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
-import { Check, X, Zap, Shield, Star } from 'lucide-react';
+import { Check, X, Zap, Shield, Star, ArrowUp, Sparkles } from 'lucide-react';
 import { PLANS, type PlanKey, initializePayment } from '@/api/services/payment.service';
-import { apiClient } from '@/api/client';
+import { getMyOrg } from '@/api/services/admin.service';
+import { getPendingPlan, clearPendingPlan } from '@/lib/pendingPlan';
+import { cn } from '@/lib/utils';
 import type { Admin } from '@/types';
+
+const PLAN_TIERS: Record<PlanKey, number> = {
+  free: 0, standard: 1, pro: 2, standard_pro: 3,
+};
 
 // ─── Route Definition ─────────────────────────────────────────────────────────
 
@@ -31,6 +37,9 @@ function AdminPricingPage() {
   const [loadingPlan, setLoadingPlan] = React.useState<PlanKey | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [orgId, setOrgId] = React.useState<string | null>(null);
+  const [currentPlanKey, setCurrentPlanKey] = React.useState<PlanKey | null>(null);
+  const pendingPlan = React.useMemo(() => getPendingPlan(), []);
+  const highlightRef = React.useRef<HTMLDivElement | null>(null);
 
   // ─── Auth Guard ───────────────────────────────────────────────────────────
   React.useEffect(() => {
@@ -39,29 +48,34 @@ function AdminPricingPage() {
     }
   }, [isAuthenticated, isAdmin, navigate]);
 
-  // ─── Fetch Org ID ─────────────────────────────────────────────────────────
+  // ─── Fetch Org (id + current plan) ───────────────────────────────────────
   React.useEffect(() => {
     if (!isAuthenticated) return;
-
-    const fetchOrg = async () => {
-      try {
-        const response = await apiClient.get('/orgs/me');
-        setOrgId(response.data.org_id);
-      } catch (err) {
-        console.error('Failed to fetch org:', err);
-        setError('Failed to load your organisation details. Please refresh the page.');
-      }
-    };
-
-    fetchOrg();
+    getMyOrg()
+      .then((org) => {
+        setOrgId(org.org_id);
+        if (org.plan && org.plan in PLAN_TIERS) {
+          setCurrentPlanKey(org.plan as PlanKey);
+        }
+      })
+      .catch(() => setError('Failed to load your organisation details. Please refresh.'));
   }, [isAuthenticated]);
+
+  // ─── Scroll to highlighted plan ───────────────────────────────────────────
+  React.useEffect(() => {
+    if (highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [pendingPlan]);
 
   if (!isAuthenticated || !isAdmin) return null;
 
+  const currentTier = currentPlanKey !== null ? PLAN_TIERS[currentPlanKey] : -1;
+
   // ─── Handle Plan Selection ────────────────────────────────────────────────
   const handleSelectPlan = async (planKey: PlanKey) => {
-    // Free plan — just go to dashboard
     if (planKey === 'free') {
+      clearPendingPlan();
       navigate({ to: '/admin/dashboard' });
       return;
     }
@@ -73,18 +87,16 @@ function AdminPricingPage() {
 
     setLoadingPlan(planKey);
     setError(null);
+    clearPendingPlan();
 
     try {
       const plan = PLANS[planKey];
-
       const result = await initializePayment({
         email: user.email,
         amount: plan.amount,
-        plan: plan.name,
-        org_id: orgId as string,
+        plan: planKey,        // store the key, not display name
+        org_id: orgId,
       });
-
-      // Redirect user to Paystack hosted payment page
       window.location.href = result.authorization_url;
     } catch (err: unknown) {
       const message =
@@ -113,10 +125,27 @@ function AdminPricingPage() {
         <div className="text-center space-y-3">
           <h1 className="text-3xl font-bold text-foreground">Choose Your Plan</h1>
           <p className="text-muted-foreground max-w-xl mx-auto text-base">
-            Run secure, transparent elections with VoteXpert. Pay only per
-            election — no monthly lock-ins, no hidden fees.
+            Pay only per election — no monthly lock-ins, no hidden fees.
           </p>
+          {currentPlanKey && (
+            <p className="text-sm text-muted-foreground">
+              You are currently on the{' '}
+              <span className="font-semibold text-foreground">{PLANS[currentPlanKey].name}</span>.
+            </p>
+          )}
         </div>
+
+        {/* ── Pending plan banner ── */}
+        {pendingPlan && pendingPlan !== 'free' && (
+          <div className="flex items-center gap-3 bg-primary/10 border border-primary/30 rounded-lg px-4 py-3 max-w-xl mx-auto text-sm">
+            <Sparkles className="w-4 h-4 text-primary shrink-0" />
+            <span className="text-foreground">
+              You selected the{' '}
+              <span className="font-semibold">{PLANS[pendingPlan].name}</span>.
+              Complete your purchase below.
+            </span>
+          </div>
+        )}
 
         {/* ── Error Message ── */}
         {error && (
@@ -129,41 +158,58 @@ function AdminPricingPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 items-start">
           {(Object.keys(PLANS) as PlanKey[]).map((planKey) => {
             const plan = PLANS[planKey];
-            const isLoading = loadingPlan === planKey;
-            const isFeatured = plan.badge === 'Most Popular';
+            const isLoading   = loadingPlan === planKey;
+            const isFeatured  = plan.badge === 'Most Popular';
             const isBestValue = plan.badge === 'Best Value';
+            const isCurrent   = planKey === currentPlanKey;
+            const isPending   = planKey === pendingPlan;
+            const planTier    = PLAN_TIERS[planKey];
+            const isDowngrade = currentTier > planTier;
+            const isUpgrade   = currentTier >= 0 && currentTier < planTier;
+
+            const ctaLabel = (() => {
+              if (isLoading)  return 'Redirecting to payment...';
+              if (isCurrent)  return 'Current Plan';
+              if (planKey === 'free') return currentTier > 0 ? 'Downgrade to Free' : 'Get Started Free';
+              if (isDowngrade) return `Downgrade to ${plan.name}`;
+              if (isUpgrade)  return `Upgrade to ${plan.name}`;
+              return plan.cta;
+            })();
 
             return (
               <div
                 key={planKey}
-                className={`relative flex flex-col rounded-xl border p-6 space-y-6 transition-shadow hover:shadow-md ${
-                  isFeatured
-                    ? 'border-primary shadow-lg bg-primary/5'
-                    : isBestValue
-                    ? 'border-amber-500/60 shadow-md bg-amber-500/5'
-                    : 'border-border bg-card'
-                }`}
+                ref={isPending ? highlightRef : undefined}
+                className={cn(
+                  'relative flex flex-col rounded-xl border p-6 space-y-6 transition-shadow hover:shadow-md',
+                  isCurrent  ? 'border-green-500/60 bg-green-500/5 shadow-md'
+                  : isPending  ? 'border-primary shadow-xl bg-primary/5 ring-2 ring-primary/30'
+                  : isFeatured ? 'border-primary shadow-lg bg-primary/5'
+                  : isBestValue ? 'border-amber-500/60 shadow-md bg-amber-500/5'
+                  : 'border-border bg-card'
+                )}
               >
                 {/* ── Badge ── */}
-                {plan.badge && (
-                  <div
-                    className={`absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-semibold text-white flex items-center gap-1 whitespace-nowrap ${
-                      isFeatured ? 'bg-primary' : 'bg-amber-500'
-                    }`}
-                  >
-                    {isFeatured && <Zap className="w-3 h-3" />}
+                {isCurrent ? (
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-semibold text-white bg-green-600 flex items-center gap-1 whitespace-nowrap">
+                    <Check className="w-3 h-3" /> Current Plan
+                  </div>
+                ) : plan.badge ? (
+                  <div className={cn(
+                    'absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-semibold text-white flex items-center gap-1 whitespace-nowrap',
+                    isFeatured ? 'bg-primary' : 'bg-amber-500'
+                  )}>
+                    {isFeatured  && <Zap className="w-3 h-3" />}
                     {isBestValue && <Star className="w-3 h-3" />}
                     {plan.badge}
                   </div>
-                )}
+                ) : null}
 
                 {/* ── Plan Name & Price ── */}
                 <div className="space-y-1 pt-2">
                   <h2 className="text-lg font-bold text-foreground">{plan.name}</h2>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-extrabold text-foreground">
-                      {plan.priceLabel}
-                    </span>
+                    <span className="text-3xl font-extrabold text-foreground">{plan.priceLabel}</span>
                   </div>
                   <p className="text-sm text-muted-foreground">{plan.subLabel}</p>
                 </div>
@@ -171,13 +217,10 @@ function AdminPricingPage() {
                 {/* ── Key Stats ── */}
                 <div className="bg-muted/40 rounded-lg p-3 space-y-1 text-sm">
                   <p className="font-medium text-foreground">
-                    {plan.maxPositions === Infinity
-                      ? 'Unlimited positions'
-                      : `Up to ${plan.maxPositions} positions`}
+                    {plan.maxPositions === Infinity ? 'Unlimited positions' : `Up to ${plan.maxPositions} positions`}
                   </p>
                   <p className="text-muted-foreground">
-                    {plan.electionsPerMonth} election
-                    {plan.electionsPerMonth > 1 ? 's' : ''} / month
+                    {plan.electionsPerMonth} election{plan.electionsPerMonth > 1 ? 's' : ''} / month
                   </p>
                   <p className="text-muted-foreground">{plan.dataRetention}</p>
                 </div>
@@ -186,18 +229,10 @@ function AdminPricingPage() {
                 <ul className="space-y-2 flex-1">
                   {plan.features.map((feature, index) => (
                     <li key={index} className="flex items-start gap-2 text-sm">
-                      {feature.included ? (
-                        <Check className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
-                      ) : (
-                        <X className="w-4 h-4 text-muted-foreground/40 mt-0.5 shrink-0" />
-                      )}
-                      <span
-                        className={
-                          feature.included
-                            ? 'text-foreground'
-                            : 'text-muted-foreground/50'
-                        }
-                      >
+                      {feature.included
+                        ? <Check className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
+                        : <X className="w-4 h-4 text-muted-foreground/40 mt-0.5 shrink-0" />}
+                      <span className={feature.included ? 'text-foreground' : 'text-muted-foreground/50'}>
                         {feature.text}
                       </span>
                     </li>
@@ -206,12 +241,13 @@ function AdminPricingPage() {
 
                 {/* ── CTA Button ── */}
                 <Button
-                  variant={plan.ctaVariant}
-                  className="w-full"
+                  variant={isCurrent ? 'outline' : isDowngrade ? 'ghost' : plan.ctaVariant}
+                  className={cn('w-full gap-2', isUpgrade && 'font-semibold')}
                   onClick={() => handleSelectPlan(planKey)}
-                  disabled={loadingPlan !== null}
+                  disabled={isCurrent || loadingPlan !== null}
                 >
-                  {isLoading ? 'Redirecting to payment...' : plan.cta}
+                  {isUpgrade && !isLoading && <ArrowUp className="w-3.5 h-3.5" />}
+                  {ctaLabel}
                 </Button>
               </div>
             );
