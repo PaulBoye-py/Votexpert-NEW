@@ -219,7 +219,6 @@ paymentRouter.get('/verify/:reference', requireAuth, async (req: Request, res: R
     }
 
     send.ok(res, {
-      success:   true,
       plan,
       org_id,
       amount:    amount / 100,

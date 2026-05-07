@@ -120,8 +120,10 @@ function AdminPricingPage() {
         },
         onSuccess: async () => {
           try {
+            console.log('Payment successful, verifying with reference:', result.reference);
             setProcessingStep(2);
             await verifyPayment(result.reference);
+            console.log('Payment verified successfully');
             setProcessingStep(3);
 
             setTimeout(() => {
@@ -133,6 +135,7 @@ function AdminPricingPage() {
               }, 2000);
             }, 1000);
           } catch (err) {
+            console.error('Payment verification error:', err);
             const message = err instanceof Error ? err.message : 'Payment verification failed';
             setProcessingStep('error');
             setProcessingError(message);
