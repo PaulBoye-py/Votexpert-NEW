@@ -27,7 +27,7 @@ orgsRouter.get('/me/usage', requireAuth, async (req: Request, res: Response) => 
     }))
     const electionsThisMonth = result.Items?.length ?? 0
     const plan = req.org!.plan ?? 'free'
-    const limits = { free: 1, standard: 2, pro: 2, standard_pro: 2 }
+    const limits = { free: 1, standard: 2, pro: 5, enterprise: Infinity }
     const electionsLimit = (limits as Record<string, number>)[plan] ?? 1
 
     send.ok(res, {

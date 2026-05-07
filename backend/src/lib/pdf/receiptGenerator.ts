@@ -159,23 +159,23 @@ interface PlanDetail {
 function getPlanDetails(plan: string): PlanDetail {
   const plans: Record<string, PlanDetail> = {
     free: {
-      description: 'Free Plan',
+      description: 'Free',
       electionsPerMonth: 1,
       maxPositions: 2,
     },
     standard: {
-      description: 'Standard Plan',
+      description: 'Pro',
       electionsPerMonth: 2,
       maxPositions: 5,
     },
     pro: {
-      description: 'Pro Plan',
-      electionsPerMonth: 2,
+      description: 'Premium',
+      electionsPerMonth: 5,
       maxPositions: 10,
     },
-    standard_pro: {
-      description: 'Standard Pro Plan',
-      electionsPerMonth: 2,
+    enterprise: {
+      description: 'Enterprise',
+      electionsPerMonth: Infinity,
       maxPositions: Infinity,
     },
   };

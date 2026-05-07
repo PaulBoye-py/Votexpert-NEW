@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import type { Admin } from '@/types';
 
 const PLAN_TIERS: Record<PlanKey, number> = {
-  free: 0, standard: 1, pro: 2, standard_pro: 3,
+  free: 0, standard: 1, pro: 2, enterprise: 3,
 };
 
 // ─── Route Definition ─────────────────────────────────────────────────────────
@@ -300,12 +300,12 @@ function AdminPricingPage() {
                 {/* ── CTA Button ── */}
                 <Button
                   variant={isCurrent ? 'outline' : isDowngrade ? 'ghost' : plan.ctaVariant}
-                  className={cn('w-full gap-2', isUpgrade && 'font-semibold')}
+                  className={cn('w-full gap-2 h-auto whitespace-normal', isUpgrade && 'font-semibold')}
                   onClick={() => handleSelectPlan(planKey)}
                   disabled={isCurrent || loadingPlan !== null}
                 >
-                  {isUpgrade && !isLoading && <ArrowUp className="w-3.5 h-3.5" />}
-                  {ctaLabel}
+                  {isUpgrade && !isLoading && <ArrowUp className="w-3.5 h-3.5 shrink-0" />}
+                  <span>{ctaLabel}</span>
                 </Button>
               </div>
             );

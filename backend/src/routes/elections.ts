@@ -17,8 +17,8 @@ electionsRouter.use(requireAuth)
 const PLAN_LIMITS = {
   free: 1,
   standard: 2,
-  pro: 2,
-  standard_pro: 2,
+  pro: 5,
+  enterprise: Infinity,
 } as const
 
 async function countElectionsThisMonth(orgId: string): Promise<number> {
