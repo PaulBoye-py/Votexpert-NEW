@@ -21,3 +21,6 @@ export { DashboardStats, ElectionDashboardStats } from './DashboardStats';
 export { PositionResultsCard } from './ResultsCard';
 export { ResultsSummary } from './ResultsSummary';
 export { VoteReceipt } from './VoteReceipt';
+
+// Global UI
+export { CookieBanner } from './CookieBanner';

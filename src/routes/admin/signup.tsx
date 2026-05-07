@@ -122,6 +122,13 @@ function AdminSignupPage() {
               Create Account
             </Button>
 
+            <p className="text-center text-xs text-muted-foreground leading-relaxed">
+              By creating an account you agree to our{' '}
+              <Link to="/terms" className="text-primary hover:underline" target="_blank">Terms of Use</Link>
+              {' '}and{' '}
+              <Link to="/privacy" className="text-primary hover:underline" target="_blank">Privacy Policy</Link>.
+            </p>
+
             <p className="text-center text-sm text-muted-foreground">
               Already have an account?{' '}
               <Link to="/admin/login" className="text-primary hover:underline font-medium">

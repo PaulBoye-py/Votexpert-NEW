@@ -1,5 +1,8 @@
 import { rootRoute } from './__root';
 import { indexRoute } from './index';
+import { pricingRoute } from './pricing';
+import { privacyRoute } from './privacy';
+import { termsRoute } from './terms';
 
 // Admin
 import { adminLoginRoute } from './admin/login';
@@ -30,6 +33,9 @@ import { publicResultsRoute } from './results/$electionId';
 // Build the route tree
 export const routeTree = rootRoute.addChildren([
   indexRoute,
+  pricingRoute,
+  privacyRoute,
+  termsRoute,
 
   // Admin
   adminLoginRoute,

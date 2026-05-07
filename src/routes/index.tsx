@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { createRoute, Link } from '@tanstack/react-router';
 import { rootRoute } from './__root';
-import { Vote, Shield, Zap, Eye, Lock, Globe, CheckCircle, ArrowRight, BarChart3, Users, Menu, X, LayoutDashboard } from 'lucide-react';
+import { Vote, Shield, Zap, Eye, Lock, Globe, CheckCircle, ArrowRight, BarChart3, Users, Menu, X, LayoutDashboard, Check, Star } from 'lucide-react';
 import { APP_NAME, APP_TAGLINE } from '@/lib/constants';
 import { Button } from '@/components/atoms';
 import { cn } from '@/lib/utils';
 import { useStore } from '@nanostores/react';
 import { $isAuthenticated } from '@/stores';
+import { PLANS, type PlanKey } from '@/api/services/payment.service';
 
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -35,6 +36,7 @@ function HomePage() {
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
             <a href="#features" className="hover:text-foreground transition-colors">Features</a>
             <a href="#how-it-works" className="hover:text-foreground transition-colors">How it works</a>
+            <Link to="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
           </nav>
 
           {/* Desktop CTAs */}
@@ -74,6 +76,7 @@ function HomePage() {
           <div className="md:hidden border-t border-border bg-background px-4 py-4 space-y-3">
             <a href="#features" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMenuOpen(false)}>Features</a>
             <a href="#how-it-works" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMenuOpen(false)}>How it works</a>
+            <Link to="/pricing" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMenuOpen(false)}>Pricing</Link>
             <div className="pt-2 flex flex-col gap-2">
               {isAuthenticated ? (
                 <Button size="sm" className="w-full gap-1.5" asChild>
@@ -321,6 +324,73 @@ function HomePage() {
         </div>
       </section>
 
+      {/* ── Pricing preview ──────────────────────────────────────────────────── */}
+      <section id="pricing" className="px-4 sm:px-6 py-20 sm:py-24">
+        <div className="max-w-6xl mx-auto space-y-10">
+          <div className="text-center space-y-3">
+            <h2 className="text-3xl sm:text-4xl font-bold">Simple, transparent pricing</h2>
+            <p className="text-muted-foreground max-w-xl mx-auto">
+              Pay only when you run an election. Your first one is free.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+            {(Object.keys(PLANS) as PlanKey[]).map((planKey) => {
+              const plan = PLANS[planKey];
+              const isFeatured  = plan.badge === 'Most Popular';
+              const isBestValue = plan.badge === 'Best Value';
+              return (
+                <div
+                  key={planKey}
+                  className={cn(
+                    'relative rounded-xl border p-5 space-y-4 transition-shadow hover:shadow-md',
+                    isFeatured  ? 'border-primary bg-primary/5 shadow-md'
+                    : isBestValue ? 'border-amber-500/60 bg-amber-500/5'
+                    : 'border-border bg-card'
+                  )}
+                >
+                  {plan.badge && (
+                    <div className={cn(
+                      'absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-xs font-semibold text-white flex items-center gap-1 whitespace-nowrap',
+                      isFeatured ? 'bg-primary' : 'bg-amber-500'
+                    )}>
+                      {isFeatured && <Zap className="w-3 h-3" />}
+                      {isBestValue && <Star className="w-3 h-3" />}
+                      {plan.badge}
+                    </div>
+                  )}
+                  <div className="pt-1">
+                    <p className="font-bold text-foreground">{plan.name}</p>
+                    <p className="text-2xl font-extrabold text-foreground mt-0.5">{plan.priceLabel}</p>
+                    <p className="text-xs text-muted-foreground">{plan.subLabel}</p>
+                  </div>
+                  <ul className="space-y-1.5">
+                    {plan.features.filter((f) => f.included).slice(0, 4).map((f, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm">
+                        <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                        <span className="text-muted-foreground">{f.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button variant={plan.ctaVariant} size="sm" className="w-full" asChild>
+                    <Link to="/pricing">{planKey === 'free' ? 'Get Started Free' : 'View Plan'}</Link>
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="text-center">
+            <Button variant="ghost" asChild className="gap-2 text-muted-foreground hover:text-foreground">
+              <Link to="/pricing">
+                Compare all plans in detail
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
       {/* ── CTA banner ───────────────────────────────────────────────────────── */}
       <section className="px-4 sm:px-6 py-20 sm:py-24">
         <div className="cta-banner-glow max-w-3xl mx-auto rounded-2xl border border-primary/20 p-8 sm:p-12 text-center space-y-5">
@@ -351,9 +421,12 @@ function HomePage() {
             </div>
             <span className="font-semibold">{APP_NAME}</span>
           </div>
-          <p className="text-sm text-muted-foreground text-center sm:text-right">
-            Secure e-voting platform for organizations. &copy; {new Date().getFullYear()}
-          </p>
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-4 text-sm text-muted-foreground">
+            <Link to="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
+            <Link to="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+            <Link to="/terms" className="hover:text-foreground transition-colors">Terms of Use</Link>
+            <span>Secure e-voting for organizations. &copy; {new Date().getFullYear()}</span>
+          </div>
         </div>
       </footer>
     </div>
