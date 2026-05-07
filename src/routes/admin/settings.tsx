@@ -1,11 +1,15 @@
 import * as React from 'react';
-import { createRoute, useNavigate } from '@tanstack/react-router';
+import { createRoute, useNavigate, Link } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
 import { rootRoute } from '../__root';
 import { AdminLayout } from '@/components/templates';
-import { Button, Input, Label } from '@/components/atoms';
+import { Button, Input, Label, Badge } from '@/components/atoms';
 import { AlertMessage } from '@/components/molecules';
+import { getOrgUsage } from '@/api/services/admin.service';
 import { $user, $isAuthenticated, $isAdmin, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
+import { Zap, TrendingUp, ArrowRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { Admin } from '@/types';
 
 export const adminSettingsRoute = createRoute({
@@ -97,6 +101,9 @@ function AdminSettingsPage() {
           </form>
         </div>
 
+        {/* ── Plan & Usage ── */}
+        <PlanUsageSection />
+
         <div className="bg-card border border-border rounded-lg p-6 space-y-6">
           <h2 className="text-lg font-semibold text-foreground">Security</h2>
 
@@ -145,5 +152,104 @@ function AdminSettingsPage() {
         </div>
       </div>
     </AdminLayout>
+  );
+}
+
+function PlanUsageSection() {
+  const { data: usage, isLoading, error } = useQuery({
+    queryKey: ['org-usage'],
+    queryFn: () => getOrgUsage(),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+        <h2 className="text-lg font-semibold text-foreground">Plan & Usage</h2>
+        <div className="h-12 bg-muted rounded animate-pulse" />
+      </div>
+    );
+  }
+
+  if (error || !usage) {
+    return null;
+  }
+
+  const planName = usage.plan.charAt(0).toUpperCase() + usage.plan.slice(1).replace('_', ' ');
+  const usagePercent = (usage.electionsThisMonth / usage.electionsLimit) * 100;
+  const isNearLimit = usagePercent >= 80;
+  const isAtLimit = usage.atLimit;
+
+  return (
+    <div className={cn(
+      'border border-border rounded-lg p-6 space-y-6',
+      isAtLimit ? 'bg-amber-500/5' : 'bg-card'
+    )}>
+      <div className="flex items-start justify-between">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold text-foreground">Plan & Usage</h2>
+          <p className="text-sm text-muted-foreground">
+            Current plan and monthly election usage
+          </p>
+        </div>
+        <Badge variant={usage.plan === 'free' ? 'default' : 'secondary'}>
+          {planName}
+        </Badge>
+      </div>
+
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-foreground">Elections This Month</p>
+            <p className="text-sm font-semibold text-foreground">
+              {usage.electionsThisMonth} of {usage.electionsLimit}
+            </p>
+          </div>
+          <div className="h-2 rounded-full bg-muted-foreground/20 overflow-hidden">
+            <div
+              className={cn(
+                'h-full transition-all',
+                isAtLimit ? 'bg-destructive' : isNearLimit ? 'bg-amber-500' : 'bg-green-500'
+              )}
+              style={{ width: `${Math.min(100, usagePercent)}%` }}
+            />
+          </div>
+          {usage.electionsRemaining > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {usage.electionsRemaining} election{usage.electionsRemaining !== 1 ? 's' : ''} remaining this month
+            </p>
+          )}
+        </div>
+
+        {isAtLimit && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 space-y-2">
+            <p className="text-sm font-medium text-amber-900">You've reached your limit</p>
+            <p className="text-xs text-amber-800">
+              Upgrade your plan to create more elections and unlock additional features.
+            </p>
+          </div>
+        )}
+
+        {isNearLimit && !isAtLimit && (
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg px-4 py-3 space-y-2">
+            <p className="text-sm font-medium text-blue-900">Getting close to your limit</p>
+            <p className="text-xs text-blue-800">
+              You have {usage.electionsRemaining} election{usage.electionsRemaining !== 1 ? 's' : ''} left. Consider upgrading for more capacity.
+            </p>
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <Button asChild className="gap-2">
+            <Link to="/admin/pricing">
+              {usage.plan === 'free' ? 'Upgrade Plan' : 'Change Plan'}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link to="/admin/elections">View Elections</Link>
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
