@@ -13,6 +13,33 @@ export const electionsRouter = Router()
 // All election routes require auth
 electionsRouter.use(requireAuth)
 
+// Plan tiers — elections/month limits
+const PLAN_LIMITS = {
+  free: 1,
+  standard: 2,
+  pro: 2,
+  standard_pro: 2,
+} as const
+
+async function countElectionsThisMonth(orgId: string): Promise<number> {
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+  const result = await db.send(new QueryCommand({
+    TableName: Tables.ELECTIONS,
+    IndexName: 'org-elections-index',
+    KeyConditionExpression: 'org_id = :orgId AND created_at >= :monthStart',
+    ExpressionAttributeValues: {
+      ':orgId': orgId,
+      ':monthStart': monthStart,
+    },
+  }))
+  return result.Items?.length ?? 0
+}
+
+function getElectionsLimit(plan: string | undefined): number {
+  return PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS] ?? 1
+}
+
 // GET /elections
 electionsRouter.get('/', async (req: Request, res: Response) => {
   try {
@@ -33,6 +60,20 @@ electionsRouter.post('/', async (req: Request, res: Response) => {
     const body: CreateElectionInput = req.body
     if (!body?.title) return send.badRequest(res, 'title is required')
     if (!body.type) return send.badRequest(res, 'type is required (OPEN or CLOSED)')
+
+    // Check plan limit
+    const orgPlan = req.org!.plan ?? 'free'
+    const limit = getElectionsLimit(orgPlan)
+    const currentCount = await countElectionsThisMonth(req.org!.org_id)
+
+    if (currentCount >= limit) {
+      return res.status(402).json({
+        success: false,
+        error: 'election_limit_reached',
+        message: `You have reached your election limit for this month (${limit} election${limit > 1 ? 's' : ''} allowed on your ${orgPlan} plan). Upgrade your plan to create more elections.`,
+        data: { current: currentCount, limit, plan: orgPlan },
+      })
+    }
 
     const now = new Date().toISOString()
     const election: Election = {

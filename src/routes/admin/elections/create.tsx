@@ -1,14 +1,14 @@
 import * as React from 'react';
-import { createRoute, useNavigate } from '@tanstack/react-router';
+import { createRoute, useNavigate, Link } from '@tanstack/react-router';
 import { useMutation } from '@tanstack/react-query';
 import { rootRoute } from '../../__root';
 import { AdminLayout } from '@/components/templates';
-import { AlertMessage, FormField, DateTimePicker } from '@/components/molecules';
+import { AlertMessage, FormField, DateTimePicker, LimitExceededModal } from '@/components/molecules';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Badge } from '@/components/atoms';
 import { createElection } from '@/api/services/admin.service';
 import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
-import { ArrowLeft, CheckCircle, Globe, Lock, Trophy, Timer, Zap, Calendar } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Globe, Lock, Trophy, Timer, Zap, Calendar, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Admin, ElectionType, LeaderboardMode } from '@/types';
 
@@ -38,6 +38,7 @@ function CreateElectionPage() {
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [apiError, setApiError] = React.useState<string | undefined>();
   const [createdId, setCreatedId] = React.useState<string | null>(null);
+  const [limitExceededData, setLimitExceededData] = React.useState<{ plan: string; current: number; limit: number } | null>(null);
 
   React.useEffect(() => {
     if (!isAuthenticated) navigate({ to: '/admin/login' });
@@ -59,7 +60,21 @@ function CreateElectionPage() {
           : {}),
       }),
     onSuccess: (election) => setCreatedId(election.election_id),
-    onError: (err: Error) => setApiError(err.message),
+    onError: (err: Error) => {
+      const msg = err.message;
+      if (msg.includes('election_limit_reached')) {
+        const match = msg.match(/current: (\d+), limit: (\d+), plan: (\w+)/);
+        if (match) {
+          setLimitExceededData({
+            current: parseInt(match[1]),
+            limit: parseInt(match[2]),
+            plan: match[3],
+          });
+        }
+      } else {
+        setApiError(msg);
+      }
+    },
   });
 
   const validate = () => {
@@ -156,6 +171,15 @@ function CreateElectionPage() {
         </div>
 
         {apiError && <AlertMessage variant="error">{apiError}</AlertMessage>}
+
+        <LimitExceededModal
+          isOpen={!!limitExceededData}
+          onClose={() => setLimitExceededData(null)}
+          plan={limitExceededData?.plan || 'free'}
+          current={limitExceededData?.current || 0}
+          limit={limitExceededData?.limit || 1}
+          limitType="elections"
+        />
 
         <Card>
           <CardHeader>

@@ -15,6 +15,8 @@ export async function handler(event: PostConfirmationTriggerEvent): Promise<Post
     email,
     cognito_user_id: sub,
     created_at: new Date().toISOString(),
+    plan: 'free',
+    plan_activated_at: new Date().toISOString(),
   }
 
   await db.send(

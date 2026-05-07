@@ -3,6 +3,7 @@
 export const ENDPOINTS = {
   // ─── Org ──────────────────────────────────────────────────────────────────
   MY_ORG: '/orgs/me',
+  MY_ORG_USAGE: '/orgs/me/usage',
 
   // ─── Elections ────────────────────────────────────────────────────────────
   ELECTIONS: '/elections',

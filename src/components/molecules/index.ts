@@ -14,3 +14,4 @@ export { CandidateCard } from './CandidateCard';
 export { ElectionCard } from './ElectionCard';
 export { StepIndicator } from './StepIndicator';
 export { PageLoader } from './PageLoader';
+export { LimitExceededModal } from './LimitExceededModal';

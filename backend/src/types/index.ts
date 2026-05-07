@@ -21,6 +21,8 @@ export interface Org {
   email: string
   cognito_user_id: string
   created_at: string   // ISO 8601
+  plan?: string        // 'free' | 'standard' | 'pro' | 'standard_pro'
+  plan_activated_at?: string
 }
 
 // ─── Election ─────────────────────────────────────────────────────────────────

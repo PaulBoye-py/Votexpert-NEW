@@ -19,6 +19,19 @@ export async function getMyOrg(): Promise<Org> {
   return res.data;
 }
 
+export interface OrgUsage {
+  plan: string;
+  electionsThisMonth: number;
+  electionsLimit: number;
+  electionsRemaining: number;
+  atLimit: boolean;
+}
+
+export async function getOrgUsage(): Promise<OrgUsage> {
+  const res = await apiClient.get<OrgUsage>(ENDPOINTS.MY_ORG_USAGE);
+  return res.data;
+}
+
 // ─── Elections ────────────────────────────────────────────────────────────────
 
 export async function getElections(): Promise<Election[]> {
