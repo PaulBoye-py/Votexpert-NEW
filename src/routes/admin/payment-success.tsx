@@ -60,7 +60,7 @@ function AdminPaymentSuccessPage() {
       try {
         const result = await verifyPayment(paymentReference);
 
-        if (result.success) {
+        if (result && result.plan) {
           // result.plan is the plan key — look up the display name
           const displayName = PLANS[result.plan as PlanKey]?.name ?? result.plan;
           setPlanName(displayName);

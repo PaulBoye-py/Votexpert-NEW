@@ -151,6 +151,7 @@ paymentRouter.post('/initialize', requireAuth, async (req: Request, res: Respons
 paymentRouter.get('/verify/:reference', requireAuth, async (req: Request, res: Response) => {
   try {
     const { reference } = req.params
+    console.log('[Payment Verify] Starting verification for reference:', reference)
 
     const response = await axios.get(
       `https://api.paystack.co/transaction/verify/${reference}`,
@@ -162,6 +163,7 @@ paymentRouter.get('/verify/:reference', requireAuth, async (req: Request, res: R
     )
 
     const data = response.data.data
+    console.log('[Payment Verify] Paystack response status:', data.status)
 
     if (data.status !== 'success') {
       return send.badRequest(res, 'Payment was not successful')
@@ -170,6 +172,7 @@ paymentRouter.get('/verify/:reference', requireAuth, async (req: Request, res: R
     const { metadata, amount, customer } = data
     const plan   = metadata?.plan
     const org_id = metadata?.org_id
+    console.log('[Payment Verify] Plan:', plan, 'Org ID:', org_id)
 
     // Persist only if this reference hasn't already been recorded (webhook may have beaten us)
     const existing = await db.send(new QueryCommand({
@@ -218,6 +221,7 @@ paymentRouter.get('/verify/:reference', requireAuth, async (req: Request, res: R
       ])
     }
 
+    console.log('[Payment Verify] Payment verified and saved successfully')
     send.ok(res, {
       plan,
       org_id,
@@ -226,6 +230,7 @@ paymentRouter.get('/verify/:reference', requireAuth, async (req: Request, res: R
       email:     customer.email,
     })
   } catch (err) {
+    console.error('[Payment Verify] Error:', err)
     send.serverError(res, err)
   }
 })

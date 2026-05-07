@@ -19,11 +19,11 @@ export interface InitPaymentResponse {
 }
 
 export interface VerifyPaymentResponse {
-  success: boolean;
   plan: string;
   org_id: string;
   amount: number;
   reference: string;
+  email: string;
 }
 
 export interface Payment {
