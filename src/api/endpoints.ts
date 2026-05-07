@@ -54,4 +54,5 @@ export const ENDPOINTS = {
   // ─── Payments ─────────────────────────────────────────────────────────────
   PAYMENT_INITIALIZE: '/payment/initialize',
   PAYMENT_VERIFY: (reference: string) => `/payment/verify/${reference}`,
+  PAYMENT_HISTORY: '/payment/history',
 } as const;

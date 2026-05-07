@@ -5,6 +5,7 @@ import { rootRoute } from '../__root';
 import { AdminLayout } from '@/components/templates';
 import { Button, Input, Label, Badge } from '@/components/atoms';
 import { AlertMessage } from '@/components/molecules';
+import { PaymentHistory } from '@/components/organisms';
 import { getOrgUsage } from '@/api/services/admin.service';
 import { $user, $isAuthenticated, $isAdmin, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
@@ -103,6 +104,15 @@ function AdminSettingsPage() {
 
         {/* ── Plan & Usage ── */}
         <PlanUsageSection />
+
+        {/* ── Payment History ── */}
+        <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Payment History</h2>
+          <p className="text-sm text-muted-foreground">
+            View and download receipts for all your payments
+          </p>
+          <PaymentHistory />
+        </div>
 
         <div className="bg-card border border-border rounded-lg p-6 space-y-6">
           <h2 className="text-lg font-semibold text-foreground">Security</h2>

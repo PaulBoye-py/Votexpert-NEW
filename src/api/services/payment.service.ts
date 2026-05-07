@@ -26,6 +26,18 @@ export interface VerifyPaymentResponse {
   reference: string;
 }
 
+export interface Payment {
+  payment_id: string;
+  org_id: string;
+  plan: string;
+  amount: number;
+  reference: string;
+  email: string;
+  paid_at: string;
+  source: 'verify' | 'webhook';
+  receipt_url?: string;
+}
+
 // ─── Plan Definitions ─────────────────────────────────────────────────────────
 
 export const PLANS = {
@@ -167,5 +179,13 @@ export async function verifyPayment(
   const response = await apiClient.get<VerifyPaymentResponse>(
     ENDPOINTS.PAYMENT_VERIFY(reference)
   );
+  return response.data;
+}
+
+/**
+ * Get payment history for the authenticated organization
+ */
+export async function getPaymentHistory(): Promise<Payment[]> {
+  const response = await apiClient.get<Payment[]>(ENDPOINTS.PAYMENT_HISTORY);
   return response.data;
 }

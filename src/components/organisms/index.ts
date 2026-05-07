@@ -24,6 +24,7 @@ export { VoteReceipt } from './VoteReceipt';
 
 // Payment
 export { PaymentProcessingOverlay } from './PaymentProcessingOverlay';
+export { PaymentHistory } from './PaymentHistory';
 
 // Global UI
 export { CookieBanner } from './CookieBanner';
