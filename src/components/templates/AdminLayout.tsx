@@ -36,6 +36,7 @@ interface AdminLayoutProps {
   adminName?: string;
   adminEmail?: string;
   orgName?: string;
+  currentPlan?: string;
   currentPath?: string;
   onNavigate?: (path: string) => void;
   onLogout?: () => void;
@@ -47,6 +48,7 @@ export function AdminLayout({
   adminName = 'Admin',
   adminEmail,
   orgName,
+  currentPlan,
   currentPath = '/admin',
   onNavigate,
   onLogout,
@@ -214,10 +216,18 @@ export function AdminLayout({
               {/* Dropdown menu */}
               {showUserMenu && (
                 <div className="absolute right-0 top-full mt-2 w-56 bg-background border border-border rounded-lg shadow-lg py-1">
-                  <div className="px-4 py-3 border-b border-border">
-                    <p className="text-sm font-medium text-foreground">{adminName}</p>
-                    {adminEmail && (
-                      <p className="text-xs text-muted-foreground truncate">{adminEmail}</p>
+                  <div className="px-4 py-3 border-b border-border space-y-2">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{adminName}</p>
+                      {adminEmail && (
+                        <p className="text-xs text-muted-foreground truncate">{adminEmail}</p>
+                      )}
+                    </div>
+                    {currentPlan && (
+                      <div className="pt-2 border-t border-border">
+                        <p className="text-xs text-muted-foreground">Current Plan</p>
+                        <p className="text-sm font-semibold text-primary capitalize">{currentPlan}</p>
+                      </div>
                     )}
                   </div>
                   <div className="py-1">

@@ -114,6 +114,7 @@ function AdminPricingPage() {
           adminName={user?.name || 'Admin'}
           adminEmail={user?.email}
           orgName={user?.org_name}
+          currentPlan={currentPlanKey ? PLANS[currentPlanKey]?.name : undefined}
           currentPath="/admin/pricing"
           onNavigate={(path) => navigate({ to: path })}
           onLogout={() => {

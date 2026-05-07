@@ -25,6 +25,10 @@ function AdminSettingsPage() {
   const isAuthenticated = useStore($isAuthenticated);
   const isAdmin = useStore($isAdmin);
   const [saved, setSaved] = React.useState(false);
+  const { data: usage } = useQuery({
+    queryKey: ['org-usage'],
+    queryFn: () => getOrgUsage(),
+  });
 
   React.useEffect(() => {
     if (!isAuthenticated || !isAdmin) {
@@ -55,6 +59,7 @@ function AdminSettingsPage() {
     <AdminLayout
       adminName={user?.name || 'Admin'}
       adminEmail={user?.email}
+      currentPlan={usage?.plan}
       currentPath="/admin/settings"
       onNavigate={handleNavigate}
       onLogout={handleLogout}
