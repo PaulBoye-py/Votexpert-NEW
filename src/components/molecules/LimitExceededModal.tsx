@@ -1,8 +1,6 @@
-import * as React from 'react';
 import { Link } from '@tanstack/react-router';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/atoms';
-import { cn } from '@/lib/utils';
 
 interface LimitExceededModalProps {
   isOpen: boolean;

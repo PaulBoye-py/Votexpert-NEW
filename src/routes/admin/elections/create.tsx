@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { createRoute, useNavigate, Link } from '@tanstack/react-router';
+import { createRoute, useNavigate } from '@tanstack/react-router';
 import { useMutation } from '@tanstack/react-query';
 import { rootRoute } from '../../__root';
 import { AdminLayout } from '@/components/templates';
@@ -8,7 +8,7 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Badg
 import { createElection } from '@/api/services/admin.service';
 import { $user, $isAuthenticated, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
-import { ArrowLeft, CheckCircle, Globe, Lock, Trophy, Timer, Zap, Calendar, ArrowRight } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Globe, Lock, Trophy, Timer, Zap, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Admin, ElectionType, LeaderboardMode } from '@/types';
 

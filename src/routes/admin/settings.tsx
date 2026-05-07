@@ -8,7 +8,7 @@ import { AlertMessage } from '@/components/molecules';
 import { getOrgUsage } from '@/api/services/admin.service';
 import { $user, $isAuthenticated, $isAdmin, logout } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
-import { Zap, TrendingUp, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Admin } from '@/types';
 
