@@ -16,6 +16,8 @@ import { adminCandidatesRoute } from './admin/candidates';
 import { adminVotersRoute } from './admin/voters';
 import { adminResultsRoute } from './admin/results';
 import { adminSettingsRoute } from './admin/settings';
+import { adminPricingRoute } from './admin/pricing';
+import { adminPaymentSuccessRoute } from './admin/payment-success';
 
 // Voter (new public flow)
 import { voteJoinRoute } from './vote/join';
@@ -44,6 +46,8 @@ export const routeTree = rootRoute.addChildren([
   adminVotersRoute,
   adminResultsRoute,
   adminSettingsRoute,
+  adminPricingRoute,
+  adminPaymentSuccessRoute,
 
   // Voter / Public
   voteJoinRoute,

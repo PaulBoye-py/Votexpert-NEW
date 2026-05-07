@@ -68,6 +68,7 @@ export class ApiStack extends cdk.Stack {
         WS_CONNECTIONS_TABLE: db.wsConnectionsTable.tableName,
         LOBBY_PARTICIPANTS_TABLE: db.lobbyParticipantsTable.tableName,
         ORG_VOTERS_TABLE: db.orgVotersTable.tableName,
+        PAYMENTS_TABLE: db.paymentsTable.tableName,
         USER_POOL_ID: auth.userPoolId,
         WS_API_ENDPOINT: props.wsCallbackUrl,
         APP_URL: process.env.APP_URL ?? 'http://localhost:5173',
@@ -76,6 +77,8 @@ export class ApiStack extends cdk.Stack {
         SMTP_USER: process.env.SMTP_USER ?? '',
         SMTP_PASS: process.env.SMTP_PASS ?? '',
         EMAIL_FROM: process.env.EMAIL_FROM ?? 'noreply@votexpert.com',
+        PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY ?? '',
+        CLIENT_URL: process.env.CLIENT_URL ?? 'https://votexpert.online',
         UPLOADS_BUCKET: mediaBucket.bucketName,
       },
       bundling: {
@@ -98,6 +101,7 @@ export class ApiStack extends cdk.Stack {
     db.wsConnectionsTable.grantReadWriteData(apiFn)
     db.lobbyParticipantsTable.grantReadWriteData(apiFn)
     db.orgVotersTable.grantReadWriteData(apiFn)
+    db.paymentsTable.grantReadWriteData(apiFn)
 
     // ─── Grant S3 access (presigned URLs + public read) ───────────────────────
     mediaBucket.grantPut(apiFn)

@@ -15,6 +15,7 @@ export class DatabaseStack extends cdk.Stack {
   public readonly wsConnectionsTable: dynamodb.Table   // Active WebSocket connections
   public readonly lobbyParticipantsTable: dynamodb.Table // Pre-start waiting room participants
   public readonly orgVotersTable: dynamodb.Table          // Org-level voter pool (reusable across elections)
+  public readonly paymentsTable: dynamodb.Table           // Payment records per org
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props)
@@ -214,6 +215,29 @@ export class DatabaseStack extends cdk.Stack {
       sortKey: { name: 'email', type: dynamodb.AttributeType.STRING },
     })
 
+    // ─── Payments ────────────────────────────────────────────────────────────
+    // One record per successful payment. Referenced by org and by Paystack
+    // reference for idempotency (webhook + verify can both fire for same txn).
+    this.paymentsTable = new dynamodb.Table(this, 'PaymentsTable', {
+      tableName: 'votexpert-payments',
+      partitionKey: { name: 'payment_id', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy,
+    })
+
+    // GSI: dedup check — look up by Paystack reference
+    this.paymentsTable.addGlobalSecondaryIndex({
+      indexName: 'reference-index',
+      partitionKey: { name: 'reference', type: dynamodb.AttributeType.STRING },
+    })
+
+    // GSI: list payment history for an org, sorted by date
+    this.paymentsTable.addGlobalSecondaryIndex({
+      indexName: 'org-payments-index',
+      partitionKey: { name: 'org_id', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'paid_at', type: dynamodb.AttributeType.STRING },
+    })
+
     // ─── Outputs ─────────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'OrgsTableName', { value: this.orgsTable.tableName })
     new cdk.CfnOutput(this, 'ElectionsTableName', { value: this.electionsTable.tableName })
@@ -225,5 +249,6 @@ export class DatabaseStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'VoteCountsTableName', { value: this.voteCountsTable.tableName })
     new cdk.CfnOutput(this, 'WSConnectionsTableName', { value: this.wsConnectionsTable.tableName })
     new cdk.CfnOutput(this, 'OrgVotersTableName', { value: this.orgVotersTable.tableName })
+    new cdk.CfnOutput(this, 'PaymentsTableName', { value: this.paymentsTable.tableName })
   }
 }

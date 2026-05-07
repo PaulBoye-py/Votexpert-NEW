@@ -49,4 +49,8 @@ export const ENDPOINTS = {
 
   // ─── Results (public) ─────────────────────────────────────────────────────
   RESULTS: (id: string) => `/results/${id}`,
+  
+  // ─── Payments ─────────────────────────────────────────────────────────────
+  PAYMENT_INITIALIZE: '/payment/initialize',
+  PAYMENT_VERIFY: (reference: string) => `/payment/verify/${reference}`,
 } as const;

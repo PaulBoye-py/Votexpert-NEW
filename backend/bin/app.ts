@@ -42,3 +42,4 @@ api.addDependency(ws)
 
 cdk.Tags.of(app).add('Project', 'VoteXpert')
 cdk.Tags.of(app).add('Environment', app.node.tryGetContext('env') ?? 'dev')
+cdk.Tags.of(app).add('aws-apn-id', 'pc:8l8gcn23lmlgammd8572tk6va')

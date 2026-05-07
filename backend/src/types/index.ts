@@ -139,6 +139,19 @@ export interface Vote {
   created_at: string
 }
 
+// ─── Payment ──────────────────────────────────────────────────────────────────
+
+export interface Payment {
+  payment_id: string
+  org_id: string
+  plan: string
+  amount: number    // in Naira
+  reference: string // Paystack transaction reference
+  email: string
+  paid_at: string   // ISO 8601
+  source: 'verify' | 'webhook'
+}
+
 // ─── Org Voter Pool ───────────────────────────────────────────────────────────
 
 // Org-level voter records that can be reused across multiple closed elections.

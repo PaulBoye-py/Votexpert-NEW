@@ -23,4 +23,5 @@ export const Tables = {
   WS_CONNECTIONS: process.env.WS_CONNECTIONS_TABLE!,
   LOBBY_PARTICIPANTS: process.env.LOBBY_PARTICIPANTS_TABLE!,
   ORG_VOTERS: process.env.ORG_VOTERS_TABLE!,
+  PAYMENTS: process.env.PAYMENTS_TABLE!,
 }
