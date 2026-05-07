@@ -41,6 +41,7 @@ function AdminPricingPage() {
   const pendingPlan = React.useMemo(() => getPendingPlan(), []);
   const highlightRef = React.useRef<HTMLDivElement | null>(null);
 
+
   // ─── Auth Guard ───────────────────────────────────────────────────────────
   React.useEffect(() => {
     if (!isAuthenticated || !isAdmin) {
@@ -89,18 +90,19 @@ function AdminPricingPage() {
     setError(null);
     clearPendingPlan();
 
+    const plan = PLANS[planKey];
+
     try {
-      const plan = PLANS[planKey];
       const result = await initializePayment({
         email: user.email,
         amount: plan.amount,
-        plan: planKey,        // store the key, not display name
+        plan: planKey,
         org_id: orgId,
       });
+
       window.location.href = result.authorization_url;
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Payment initialization failed. Please try again.';
+      const message = err instanceof Error ? err.message : 'Payment initialization failed. Please try again.';
       setError(message);
       setLoadingPlan(null);
     }
@@ -109,17 +111,17 @@ function AdminPricingPage() {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <AdminLayout
-      adminName={user?.name || 'Admin'}
-      adminEmail={user?.email}
-      orgName={user?.org_name}
-      currentPath="/admin/pricing"
-      onNavigate={(path) => navigate({ to: path })}
-      onLogout={() => {
-        logout();
-        navigate({ to: '/admin/login' });
-      }}
-    >
-      <div className="space-y-12">
+        adminName={user?.name || 'Admin'}
+        adminEmail={user?.email}
+        orgName={user?.org_name}
+        currentPath="/admin/pricing"
+        onNavigate={(path) => navigate({ to: path })}
+        onLogout={() => {
+          logout();
+          navigate({ to: '/admin/login' });
+        }}
+      >
+        <div className="space-y-12">
 
         {/* ── Page Header ── */}
         <div className="text-center space-y-3">

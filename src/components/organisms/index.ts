@@ -22,5 +22,8 @@ export { PositionResultsCard } from './ResultsCard';
 export { ResultsSummary } from './ResultsSummary';
 export { VoteReceipt } from './VoteReceipt';
 
+// Payment
+export { PaymentProcessingOverlay } from './PaymentProcessingOverlay';
+
 // Global UI
 export { CookieBanner } from './CookieBanner';
