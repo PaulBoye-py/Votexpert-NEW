@@ -112,7 +112,6 @@ function VoteJoinPage() {
             session_token: sessionData.session_token,
             election_id: eid,
             display_name: displayName.trim() || 'Anonymous',
-            votes_cast: sessionData.votes_cast ?? {},
           });
           navigate({ to: '/vote/$electionId/ballot', params: { electionId: eid } });
         } else {
@@ -140,7 +139,6 @@ function VoteJoinPage() {
             election_id: eid,
             participant_id: lobby.participant_id,
             display_name: lobby.display_name,
-            votes_cast: sessionData.votes_cast ?? {},
           });
           navigate({ to: '/vote/$electionId/ballot', params: { electionId: eid } });
         }

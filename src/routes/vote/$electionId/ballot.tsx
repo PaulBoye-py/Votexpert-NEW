@@ -32,15 +32,12 @@ function BallotPage() {
   const [selectedCandidate, setSelectedCandidate] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | undefined>();
   const [positionErrors, setPositionErrors] = React.useState<Record<string, string>>({});
-  const [votedPositions, setVotedPositions] = React.useState<Set<string>>(
-    () => new Set(Object.keys(session?.votes_cast ?? {}))
-  );
+  // Track which positions have been voted on (populated only from successful vote casts)
+  const [votedPositions, setVotedPositions] = React.useState<Set<string>>(() => new Set());
   // Scheduled: track selected candidate per position before confirming
   const [selectedCandidates, setSelectedCandidates] = React.useState<Record<string, string>>({});
   // Scheduled: track which candidate was actually voted for (for collapsed display)
-  const [votedCandidates, setVotedCandidates] = React.useState<Record<string, string>>(
-    () => session?.votes_cast ?? {}
-  );
+  const [votedCandidates, setVotedCandidates] = React.useState<Record<string, string>>({});
 
   // Redirect if no session
   React.useEffect(() => {

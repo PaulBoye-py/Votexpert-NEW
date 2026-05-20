@@ -16,6 +16,7 @@ import { Position } from '../../types'
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   try {
     const body = parseBody<{ election_id: string; session_token?: string }>(event)
+    console.log('[join-session] Request body:', JSON.stringify(body))
     if (!body?.election_id) return badRequest('election_id is required')
 
     const election = (
@@ -32,11 +33,13 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // If the voter already has a session token, return the existing session
     if (body.session_token) {
+      console.log('[join-session] Looking up existing session:', body.session_token)
       const existing = (
         await db.send(new GetCommand({ TableName: Tables.VOTE_SESSIONS, Key: { session_token: body.session_token } }))
       ).Item as VoteSession | undefined
 
       if (existing && existing.election_id === body.election_id) {
+        console.log('[join-session] Found existing session with votes:', existing.votes_cast)
         // Fetch current active position for the response
         const positions = await getPositions(body.election_id)
         const activePosition = election.started_at
@@ -46,6 +49,8 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
         return ok({ session_token: existing.session_token, votes_cast: existing.votes_cast, active_position: activePosition })
       }
     }
+
+    console.log('[join-session] Creating new session')
 
     // Create a new anonymous session
     const ip = event.requestContext.identity?.sourceIp ?? 'unknown'

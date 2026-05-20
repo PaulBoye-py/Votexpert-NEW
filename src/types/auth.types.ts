@@ -42,5 +42,6 @@ export interface VoterSession {
   invite_token?: string;   // for closed elections
   participant_id?: string; // lobby participant ID (set when joining lobby)
   display_name?: string;   // voter's chosen display name (open elections)
-  votes_cast?: Record<string, string>; // positions already voted — prevents revote on reload
+  // Note: votes_cast is NOT stored in localStorage to prevent using stale voter data
+  // Always fetch fresh votes from backend via session token
 }

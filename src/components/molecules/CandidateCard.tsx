@@ -58,16 +58,16 @@ export function CandidateCard({
         </div>
       )}
 
-      <div className="p-4">
+      <div className="p-4 space-y-3">
         {/* Header with photo and name */}
-        <div className="flex items-center gap-3 mb-3">
-          <Avatar className="h-14 w-14">
+        <div className="flex items-start gap-3 min-w-0">
+          <Avatar className="h-14 w-14 shrink-0">
             {photoUrl && <AvatarImage src={photoUrl} alt={name} />}
             <AvatarFallback className="text-lg">{getInitials(name)}</AvatarFallback>
           </Avatar>
-          <div>
-            <h3 className="font-semibold text-foreground">{name}</h3>
-            <Badge variant="secondary" className="mt-1">
+          <div className="min-w-0 flex-1">
+            <h3 className="font-semibold text-foreground truncate">{name}</h3>
+            <Badge variant="secondary" className="mt-1 w-fit">
               {position}
             </Badge>
           </div>
@@ -75,16 +75,16 @@ export function CandidateCard({
 
         {/* Bio */}
         {bio && (
-          <p className="text-sm text-muted-foreground line-clamp-2">{bio}</p>
+          <p className="text-sm text-muted-foreground line-clamp-2 break-words">{bio}</p>
         )}
 
         {/* Manifesto preview */}
         {manifesto && (
-          <div className="mt-3 pt-3 border-t border-border">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+          <div className="pt-3 border-t border-border space-y-1">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">
               Manifesto
             </p>
-            <p className="text-sm text-muted-foreground line-clamp-3">
+            <p className="text-sm text-muted-foreground line-clamp-3 break-words">
               {manifesto}
             </p>
           </div>

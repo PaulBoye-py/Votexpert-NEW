@@ -77,7 +77,7 @@ function WaitingPage() {
       // Create a fresh session when transitioning from waiting to ballot
       startVoteSession(electionId)
         .then((sd) => {
-          setVoterSession({ ...session!, session_token: sd.session_token, votes_cast: sd.votes_cast ?? {} });
+          setVoterSession({ ...session!, session_token: sd.session_token });
           navigate({ to: '/vote/$electionId/ballot', params: { electionId } });
         })
         .catch(() => navigate({ to: '/vote/$electionId/ballot', params: { electionId } }));

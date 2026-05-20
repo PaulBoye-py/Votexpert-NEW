@@ -62,7 +62,6 @@ function InviteTokenHandler() {
             session_token: '',
             invite_token: token,
             election_id: electionId,
-            votes_cast: data.votes_cast ?? {},
           });
           navigate({ to: '/vote/$electionId/ballot', params: { electionId } });
           return;
@@ -76,7 +75,6 @@ function InviteTokenHandler() {
           election_id: electionId,
           participant_id: lobby.participant_id,
           display_name: lobby.display_name,
-          votes_cast: data.votes_cast ?? {},
         });
         navigate({ to: '/vote/$electionId/lobby', params: { electionId } });
       })
