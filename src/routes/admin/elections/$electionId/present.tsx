@@ -379,7 +379,7 @@ function LiveBars({
 }: {
   electionId: string;
   positionId: string;
-  liveData: ReturnType<typeof getPublicElection> extends Promise<infer T> ? T : never;
+  liveData: Awaited<ReturnType<typeof getPublicElection>>;
 }) {
   const pos = liveData.positions.find(p => p.position_id === positionId);
   if (!pos) return null;
