@@ -15,7 +15,11 @@ import { paymentRouter } from './routes/payment'
 
 export const app = express()
 
-app.use(cors({ origin: '*', allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Token'] }))
+app.use(cors({
+  origin: '*',
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Token'],
+  credentials: false,
+}))
 app.use(express.json({ limit: '5mb' }))
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
