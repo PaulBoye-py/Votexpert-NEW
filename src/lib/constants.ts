@@ -1,7 +1,7 @@
 // API Configuration
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  'https://4yqf9s94k0.execute-api.us-east-1.amazonaws.com/dev';
+  'https://4yqf9s94k0.execute-api.us-east-1.amazonaws.com/prod';
 
 // Cognito
 export const COGNITO_CLIENT_ID =
