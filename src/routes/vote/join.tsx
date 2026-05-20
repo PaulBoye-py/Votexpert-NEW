@@ -21,7 +21,6 @@ import {
 import { setVoterSession } from '@/stores/auth.store';
 import { Loader2, Vote, Users, ArrowRight, Hash, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { VOTER_SESSION_KEY } from '@/lib/constants';
 
 interface JoinSearch {
   code?: string;
@@ -107,12 +106,8 @@ function VoteJoinPage() {
       if (isScheduled) {
         // Scheduled elections: no lobby — either go to ballot (if ACTIVE) or show waiting screen
         if (electionInfo.status === 'ACTIVE') {
-          const existing = (() => {
-            try { const s = localStorage.getItem(VOTER_SESSION_KEY); return s ? JSON.parse(s) : null; }
-            catch { return null; }
-          })();
-          const existingToken = existing?.election_id === eid ? existing.session_token : undefined;
-          const sessionData = await startVoteSession(eid, existingToken);
+          // Always create a fresh session for new joins, don't reuse cached tokens
+          const sessionData = await startVoteSession(eid);
           setVoterSession({
             session_token: sessionData.session_token,
             election_id: eid,
@@ -138,12 +133,8 @@ function VoteJoinPage() {
       if (electionInfo.status === 'ACTIVE') {
         // Already live — create session and go straight to ballot
         if (electionInfo.type === 'OPEN') {
-          const existing = (() => {
-            try { const s = localStorage.getItem(VOTER_SESSION_KEY); return s ? JSON.parse(s) : null; }
-            catch { return null; }
-          })();
-          const existingToken = existing?.election_id === eid ? existing.session_token : undefined;
-          const sessionData = await startVoteSession(eid, existingToken);
+          // Always create a fresh session for new joins, don't reuse cached tokens
+          const sessionData = await startVoteSession(eid);
           setVoterSession({
             session_token: sessionData.session_token,
             election_id: eid,

@@ -48,9 +48,13 @@ export async function startVoteSession(
   electionId: string,
   existingToken?: string
 ): Promise<VoteSessionResponse> {
+  const body: Record<string, string> = { election_id: electionId };
+  if (existingToken) {
+    body.session_token = existingToken;
+  }
   const res = await publicApiClient.post<VoteSessionResponse>(
     ENDPOINTS.VOTE_SESSION,
-    { election_id: electionId, session_token: existingToken }
+    body
   );
   return res.data;
 }

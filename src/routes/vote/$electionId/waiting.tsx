@@ -12,7 +12,6 @@ import { getLobbyState, startVoteSession } from '@/api/services/voter.service';
 import { $voterSession, setVoterSession } from '@/stores/auth.store';
 import { useStore } from '@nanostores/react';
 import { Vote, Calendar, Loader2 } from 'lucide-react';
-import { VOTER_SESSION_KEY } from '@/lib/constants';
 
 export const voteWaitingRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -75,12 +74,8 @@ function WaitingPage() {
 
     if (data.election_status === 'ACTIVE') {
       setTransitioning(true);
-      const existing = (() => {
-        try { const s = localStorage.getItem(VOTER_SESSION_KEY); return s ? JSON.parse(s) : null; }
-        catch { return null; }
-      })();
-      const existingToken = existing?.election_id === electionId ? existing.session_token : undefined;
-      startVoteSession(electionId, existingToken)
+      // Create a fresh session when transitioning from waiting to ballot
+      startVoteSession(electionId)
         .then((sd) => {
           setVoterSession({ ...session!, session_token: sd.session_token, votes_cast: sd.votes_cast ?? {} });
           navigate({ to: '/vote/$electionId/ballot', params: { electionId } });
