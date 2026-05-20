@@ -370,7 +370,7 @@ function BallotPage() {
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-sm">{c.name}</p>
                               {c.bio && (
-                                <p className="text-xs text-muted-foreground truncate">{c.bio}</p>
+                                <p className="text-xs text-muted-foreground line-clamp-2 break-words">{c.bio}</p>
                               )}
                             </div>
                           </div>
@@ -587,7 +587,7 @@ function BallotPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium">{c.name}</p>
-                      {c.bio && <p className="text-sm text-muted-foreground truncate">{c.bio}</p>}
+                      {c.bio && <p className="text-sm text-muted-foreground line-clamp-2 break-words">{c.bio}</p>}
                     </div>
                     {selectedCandidate === c.candidate_id && (
                       <CheckCircle className="h-5 w-5 text-primary shrink-0" />
