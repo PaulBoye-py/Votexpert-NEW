@@ -370,7 +370,7 @@ function BallotPage() {
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-sm">{c.name}</p>
                               {c.bio && (
-                                <p className="text-xs text-muted-foreground line-clamp-2 break-words">{c.bio}</p>
+                                <p className="text-xs text-muted-foreground line-clamp-3 break-words">{c.bio}</p>
                               )}
                             </div>
                           </div>
