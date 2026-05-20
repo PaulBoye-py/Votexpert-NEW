@@ -218,6 +218,7 @@ function BallotPage() {
     const allPositions = data?.positions ?? [];
     const votedCount = allPositions.filter(p => votedPositions.has(p.position_id)).length;
     const allVoted = allPositions.length > 0 && votedCount === allPositions.length;
+    console.log('Scheduled ballot state:', { allPositions: allPositions.length, votedCount, allVoted, votedPositions: Array.from(votedPositions) });
     const endTime = election.scheduled_end_at
       ? new Date(election.scheduled_end_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
       : null;
